@@ -1,12 +1,19 @@
-* curbside-features
+* curbside-clojure-ml
 
-=curbside-features= is a library used to calculate the value(s) of all the features that can be defined for any curbside-prediction predictors. Any piece of software at Curbside should use that library to make sure that all the features values uses the same code base to compute the values. That way, we make sure that different bugs are not existing in different implementations which would result in unexpected models results.
+=curbside-clojure-ml= is a library used to train and optimize models, as well as to make predictions. It implements the following ML algorithms:
+- =lsvm=
+- =svm=
+- =c4=
+- =random-forest=
+- =m5p=
+- =neural-net=
+- =xgboost=
 
 ** Releasing to Artifactory
 
 We use [[lein-release][https://github.com/relaynetwork/lein-release]] to release artifacts to Artifactory. To use:
 
-1. Export `ARTIFACTORY_USER` and `ARTIFACTORY_PASS`. You can find the values for these in `eng.json` in `curbside-secrets`.
-2. Make sure you are on the master branch, and that its remote branch is set to the primary source repo (https://github.com/Curbside/curbside-features).
-3. Ensure that `pgp-agent` has your password cached so you don't need to be prompted. `lein release` sometimes malfunctions if it is interrupted by the pgp prompt.
-4. Run `lein release :patch`. Replace `:patch` with `:minor` or `:major` as needed. This determines which of the version numbers will be changed in project.clj (the version number format is MAJOR.MINOR.PATCH).
+1. Export =ARTIFACTORY_USER= and =ARTIFACTORY_PASS=. You can find the values for these in =eng.json= in =curbside-secrets=.
+2. Make sure you are on the master branch, and that its remote branch is set to the primary source repository (https://github.com/Curbside/curbside-clojure-ml).
+3. Ensure that =pgp-agent= has your password cached so you don't need to be prompted. =lein release= sometimes malfunctions if it is interrupted by the pgp prompt.
+4. Run =lein release :patch=. Replace =:patch= with =:minor= or =:major= as needed. This determines which of the version numbers will be changed in project.clj (the version number format is MAJOR.MINOR.PATCH).
