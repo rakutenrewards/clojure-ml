@@ -6,6 +6,9 @@
 * Table of Contents                                             :toc:noexport:
 - [[#namespace-definition][Namespace definition]]
 - [[#date-time-parsing][Date time parsing]]
+- [[#tests][Tests]]
+  - [[#namespace-definition-1][Namespace definition]]
+  - [[#parse][Parse]]
 
 * Namespace definition
 
@@ -42,4 +45,33 @@
   [date-time]
   (when (not-empty date-time)
     (time-format/parse iso-date-time-formatter date-time)))
+#+END_SRC
+
+* Tests
+** Namespace definition
+
+#+NAME: Tests namespace
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/date_time_test.clj
+(ns curbside.ml.utils.date-time-test
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [curbside.ml.utils.date-time :as date-time]
+   [clj-time.types :as time-types]))
+#+END_SRC
+
+** Parse
+
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/date_time_test.clj
+(deftest parse
+  (testing "given string dates in ISO 8601 formats, when parsing them, then a date-time object is returned."
+    (is (time-types/date-time? (date-time/parse "2019-01-01T12:00:00")))
+    (is (time-types/date-time? (date-time/parse "2019-01-01T12:00:00.000Z")))
+    (is (time-types/date-time? (date-time/parse "2019-01-01T12:00:00.000-04")))
+    (is (time-types/date-time? (date-time/parse "2019-01-01T12:00:00Z"))))
+
+  (testing "given string dates in SQL friendly format, when parsing them, then a date-time object is returned."
+    (is (time-types/date-time? (date-time/parse "2019-01-01 12:00:00")))
+    (is (time-types/date-time? (date-time/parse "2019-01-01 12:00:00.000Z")))
+    (is (time-types/date-time? (date-time/parse "2019-01-01 12:00:00.000-04")))
+    (is (time-types/date-time? (date-time/parse "2019-01-01 12:00:00Z")))))
 #+END_SRC
