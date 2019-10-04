@@ -3,15 +3,10 @@
   :url "http://github.com/Curbside/curbside-clojure-ml"
   :dependencies [[org.clojure/clojure "1.10.1"]
                  [clj-time "0.15.2"]
-
-                 ;; Logging
-                 [org.clojure/tools.logging "0.5.0"]
-                 [org.slf4j/slf4j-log4j12 "1.7.28"]
-                 [log4j "1.2.17"]]
+                 [nz.ac.waikato.cms.weka/weka-dev "3.9.3"]]
 
   :profiles {:uberjar {:aot :all}
-             :ci [{:plugins [[test2junit "1.3.3"]]}]
-             :quiet {:jvm-opts ["-Dlog4j.configuration=log4j-quiet.properties"]}}
+             :ci [{:plugins [[test2junit "1.3.3"]]}]}
 
   :plugins [[com.gfredericks/how-to-ns "0.1.6"]
             [lein-ancient "0.6.15"]
@@ -45,5 +40,4 @@
                            :unused-ret-vals
                            :unused-ret-vals-in-try]}
 
-  :jvm-opts ["-Dlog4j.configuration=log4j-development.properties"
-             "-XX:-OmitStackTraceInFastThrow"])
+  :jvm-opts ["-XX:-OmitStackTraceInFastThrow"])
