@@ -30,5 +30,6 @@ test:
 	lein test
 
 .PHONY: test-jenkins
+test-jenkins: tangle
 test-jenkins:
-	lein with-profile ci test2junit
+	lein trampoline with-profile ci test2junit

@@ -1,0 +1,60 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../src/curbside/ml/interface.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: ML Algorithms Interface
+
+* Table of Contents                                             :toc:noexport:
+- [[#interfaces][Interfaces]]
+
+* Interfaces
+
+All models implement a few common functions:
+
+1. =save= and =load= functions to persist a trained model to disk and load it again later.
+2. =train= to train the model on a given problem.
+3. =cross-validate= to evaluate the model's performance on a data set.
+4. =grid-search= to find optimal model hyperparameters for a data set.
+5. =predict= to make a prediction
+6. =dispose= to free allocated memory, if applicable
+
+We will define multimethods for all of these operations. These multimethods will switch based on a keyword specifying the algorithm to use. Using a keyword allows us to easily specify the algorithm in the edn pipeline configs.
+
+#+NAME: interfaces
+#+BEGIN_SRC clojure
+(ns curbside.ml.interface)
+
+(defmulti save-model
+  (fn [algorithm model file]
+    algorithm))
+
+(defmulti load-model
+  (fn [algorithm file]
+    algorithm))
+
+(defmulti load-model-from-bytes
+  (fn [algorithm bytes]
+    algorithm))
+
+(defmulti train-model
+  (fn [algorithm prob params]
+    algorithm))
+
+(defmulti cross-validate
+  (fn [algorithm training-set-file config scale parameters & args]
+    algorithm))
+
+(defmulti grid-search
+  (fn [algorithm config scale training-set-file & args]
+    algorithm))
+
+(defmulti predict
+  (fn [algorithm model config feature-vector]
+    algorithm))
+
+(defmulti dispose
+  (fn [algorithm model]
+    algorithm))
+
+(defmethod dispose :default
+  [_ _])
+#+END_SRC

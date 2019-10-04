@@ -16,7 +16,8 @@
 (ns curbside.ml.utils.date-time
   (:require
    [clj-time.format :as time-format])
-  (:import (org.joda.time DateTimeZone)))
+  (:import
+   (org.joda.time DateTimeZone)))
 #+END_SRC
 
 * Date time parsing
