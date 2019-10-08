@@ -1,0 +1,84 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../src/curbside/ml/metrics.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: Metrics
+
+* Table of Contents                                            :toc:noexport:
+- [[#introduction][Introduction]]
+- [[#namespace-definition][Namespace definition]]
+- [[#model-metrics][Model metrics]]
+
+* Introduction
+
+The main metrics involved in =classification= tasks are:
+
+  1. =True Positives=
+  2. =False Positives=
+  3. =True Negatives=
+  4. =False Negatives=
+  5. =Precision=
+  6. =Accuracy=
+  7. =Recall=
+  8. =False Positive Rate=
+  9. =True Positive Rate=
+  10. =Area Under The Curve=
+  11. =Area Under PRC=
+  12. =F-Measures=
+      1. =F1=
+
+The main metrics involved in =regression= tasks are:
+
+  1. =Correlation Coefficient=
+  2. =Error Rate=
+  3. =Root Relative Square Error=
+  4. =Root Mean Square Error=
+  5. =Root Mean Prior Squared Error=
+  6. =Relative Absolute Error=
+
+* Namespace definition
+
+#+BEGIN_SRC clojure
+(ns curbside.ml.metrics
+  (:require
+   [curbside.ml.stats :as stats]
+   [curbside.ml.utils.parsing :as parsing])
+  (:import (weka.classifiers.evaluation ConfusionMatrix ThresholdCurve)))
+#+END_SRC
+
+* Model metrics
+
+#+BEGIN_SRC clojure
+(defn model-metrics
+  "Calculate all the metrics given an ArrayList of predictions. Return a map of
+  the computed metrics."
+  [predictor-type predictions eval-atoms]
+  (let [confusion-matrix (ConfusionMatrix. (into-array String ["1.0" "0.0"]))
+        _ (.addPredictions confusion-matrix predictions)
+        two-classes-stats (.getTwoClassStats confusion-matrix 1)
+        threshold-curve (ThresholdCurve.)
+        instances (.getCurve threshold-curve predictions)]
+    (merge {:mean-absolute-error (stats/mean-absolute-error @(:n eval-atoms) @(:abs-error eval-atoms))
+            :root-mean-square-error (stats/root-mean-square-error @(:n eval-atoms) @(:square-error eval-atoms))
+            :total-number-instances (double @(:n eval-atoms))}
+           (when (= predictor-type :classification)
+             {:tp (parsing/nan->nil (.getTruePositive two-classes-stats))
+              :fp (parsing/nan->nil (.getFalsePositive two-classes-stats))
+              :tn (parsing/nan->nil (.getTrueNegative two-classes-stats))
+              :fn (parsing/nan->nil (.getFalseNegative two-classes-stats))
+              :recall (parsing/nan->nil (.getRecall two-classes-stats))
+              :precision (parsing/nan->nil (.getPrecision two-classes-stats))
+              :fpr (parsing/nan->nil (.getFalsePositiveRate two-classes-stats))
+              :tpr (parsing/nan->nil (.getTruePositiveRate two-classes-stats))
+              :accuracy (parsing/nan->nil
+                         (/ (+ (.getTruePositive two-classes-stats) (.getTrueNegative two-classes-stats))
+                            (+ (.getTruePositive two-classes-stats) (.getTrueNegative two-classes-stats)
+                               (.getTrueNegative two-classes-stats) (.getFalseNegative two-classes-stats))))
+              :f1 (parsing/nan->nil (.getFMeasure two-classes-stats))
+              :roc-auc (parsing/nan->nil (ThresholdCurve/getROCArea instances))
+              :auprc (parsing/nan->nil (ThresholdCurve/getPRCArea instances))
+              :kappa (parsing/nan->nil (stats/kappa confusion-matrix))
+              :incorrectly-classified-instances (parsing/nan->nil (stats/incorrectly-classified confusion-matrix))
+
+              :correctly-classified-instances (parsing/nan->nil (stats/correctly-classified confusion-matrix))
+              :correctly-classified-instances-percent (parsing/nan->nil (stats/correctly-classified-percent confusion-matrix))}))))
+#+END_SRC

@@ -23,7 +23,7 @@
   (:require [clojure.java.io :as io]
             [clojure.data.csv :as csv]
             [clojure.string :as string]
-            [curbside.prediction.training-sets.parse-utils :as parse])
+            [curbside.ml.utils.parsing :as parsing])
   (:import (weka.core.converters CSVSaver)
            (weka.filters Filter)
            (weka.filters.unsupervised.attribute NumericToNominal)))
@@ -171,7 +171,7 @@ Where converting a training set to CSV, the order of the column is important, as
 
 (defn- parse-row-values
   [csv-row]
-  (mapv #(try (parse/parse-double %)
+  (mapv #(try (parsing/parse-double %)
               (catch Exception _e %))
         csv-row))
 

@@ -14,11 +14,16 @@
 
 #+BEGIN_SRC clojure
 (ns curbside.ml.model
+  (:refer-clojure :exclude [load])
   (:require
    [clojure.data.csv :as csv]
+   [clojure.java.io :as io]
+   [curbside.ml.metrics :as metrics]
    [curbside.ml.utils.parsing :as parsing]
    [curbside.ml.training-sets.scaling :as scaling]
-   [curbside.ml.training-sets.conversion :as conversion]))
+   [curbside.ml.training-sets.conversion :as conversion])
+  (:import
+   (weka.classifiers.evaluation NominalPrediction)))
 #+END_SRC
 
 * Multimethods
@@ -50,7 +55,7 @@ We will define multimethods for all of these operations. These multimethods will
   (fn [algorithm prob hyperparameters]
     algorithm))
 
-(defmulti ^:private predict
+(defmulti predict
   (fn [algorithm model feature-vector]
     algorithm))
 
@@ -59,13 +64,14 @@ We will define multimethods for all of these operations. These multimethods will
     algorithm))
 
 (defmethod dispose :default
-  [_ _])
+  [_ _]
+  nil)
 #+END_SRC
 
 * Inference
 
 #+BEGIN_SRC clojure
-(defn- select-features
+(defn- parse-feature-map
   [selected-features feature-map]
   (reduce-kv #(assoc % %2 (parsing/parse-double %3))
              {}
@@ -97,10 +103,10 @@ We will define multimethods for all of these operations. These multimethods will
   - Querying a model prediction
   - Scaling the output of the model"
   ([algorithm model selected-features feature-map]
-   (prediction selected-features algorithm model feature-map))
+   (infer algorithm model selected-features nil nil nil feature-map))
   ([algorithm model selected-features feature-scaling-fns label-scaling-fns scale-factors feature-map]
   (->> feature-map
-       (select-features selected-features)
+       (parse-feature-map selected-features)
        (feature-scaling feature-scaling-fns scale-factors)
        (prediction selected-features algorithm model)
        (unscale-inference label-scaling-fns scale-factors))))
@@ -109,6 +115,10 @@ We will define multimethods for all of these operations. These multimethods will
 * Evaluation
 
 #+BEGIN_SRC clojure
+(defn- classify
+  [actual predicted]
+  (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
+
 (defn- evaluate-fold
   [algorithm config scale-factors hyperparameters training-set validation-set eval-atoms mode predictions]
   (let [problem (apply concat training-set)
@@ -117,10 +127,12 @@ We will define multimethods for all of these operations. These multimethods will
       (let [feature-names (-> config
                               :features-selection
                               :selected-features)
+            feature-scaling-fns (get-in config [:scale-training-sets :feature-scaling-fns])
+            label-scaling-fns (get-in config [:scale-training-sets :label-scaling-fns])
             features-map (into {} (map vector feature-names features))
-            predicted-value (predict algorithm model config scale-factors features-map)]
+            predicted-value (infer algorithm model feature-names feature-scaling-fns label-scaling-fns scale-factors features-map)]
         (when (= mode :classification)
-          (.add predictions (prediction (Double/parseDouble target) predicted-value)))
+          (.add predictions (classify (Double/parseDouble target) predicted-value)))
         (let [diff (- (parsing/parse-double target) predicted-value)
               abs-error (Math/abs diff)
               square-error (* diff diff)]
@@ -181,16 +193,17 @@ We will define multimethods for all of these operations. These multimethods will
       (doseq [f @futures]
         @f))
 
-    (calculate-metrics mode predictions eval-atoms)))
+    (metrics/model-metrics mode predictions eval-atoms)))
 
 (defn evaluate
   [algorithm training-set-file config scale hyperparameters
-   & {:keys [k-folds multithreads mode] :as options}]
+   & {:keys [_k-folds _multithreads _mode] :as options}]
   (cross-validate algorithm training-set-file config scale hyperparameters options))
 #+END_SRC
 
 * Hyperparameters optimization
 
 #+BEGIN_SRC clojure
-(defn optimize-hyperparameters [algorithm])
+(defn optimize-hyperparameters [algorithm]
+  nil)
 #+END_SRC

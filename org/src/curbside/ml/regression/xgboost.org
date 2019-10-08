@@ -24,7 +24,7 @@ This document defines a simple Clojure interface to XGBoost, a library for gradi
   (:require
    [clojure.java.io :as io]
    [clojure.walk :as walk]
-   [curbside.ml.interface :as interface]
+   [curbside.ml.model :as model]
    [curbside.ml.utils.parsing :as parsing])
   (:import
    (ml.dmlc.xgboost4j LabeledPoint)
@@ -92,7 +92,7 @@ For the parameters to XGBoost
    (:obj-fn params)
    (:eval-fn params)))
 
-(defmethod interface/train-model :xgboost
+(defmethod model/train :xgboost
   [_ prob params]
   (train prob params))
 #+END_SRC
@@ -108,7 +108,7 @@ XGBoost is a thin wrapper around a C++ library, so most memory is allocated off-
   (locking model
     (.dispose model)))
 
-(defmethod interface/dispose :xgboost
+(defmethod model/dispose :xgboost
   [_ model]
   (dispose model))
 #+END_SRC
@@ -142,9 +142,9 @@ arrays when it creates them.
   (DMatrix. (.iterator [(->LabeledPoint vec)]) nil))
 
 (defn- predict
-  [model config feature-vector]
-  (let [booster (get-in config [:train-models :hyperparameters :booster])
-        num-trees (get-in config [:train-models :hyperparameters :num-rounds])
+  [model hyperparameters feature-vector]
+  (let [booster (:booster hyperparameters)
+        num-trees (:num-rounds hyperparameters)
         ;; Pad to add a dummy label at the front of the vector.
         ;; It will be ignored when doing prediction
         dmatrix (->predict-DMatrix (into [1.0 2.0] feature-vector))]
@@ -162,7 +162,7 @@ arrays when it creates them.
      (nth 0)
      (nth 0))))
 
-(defmethod interface/predict :xgboost
+(defmethod model/predict :xgboost
   [_ model config feature-vector]
   (predict model config feature-vector))
 #+END_SRC
@@ -214,16 +214,16 @@ using standard XGBoost methods.
 
 #+NAME: model management
 #+BEGIN_SRC clojure
-(defmethod interface/save-model :xgboost
+(defmethod model/save :xgboost
   [_ model file]
   (.saveModel model file)
   [file])
 
-(defmethod interface/load-model :xgboost
+(defmethod model/load :xgboost
   [_ file]
   (XGBoost/loadModel file))
 
-(defmethod interface/load-model-from-bytes :xgboost
+(defmethod model/load-from-bytes :xgboost
   [_ bytes]
   (with-open [input (io/input-stream bytes)]
     (XGBoost/loadModel input)))

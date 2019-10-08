@@ -4,6 +4,7 @@
   :dependencies [[org.clojure/clojure "1.10.1"]
                  [org.clojure/data.csv "0.1.4"]
                  [clj-time "0.15.2"]
+                 [medley "1.2.0"]
 
                  ;; weka ML
                  [nz.ac.waikato.cms.weka/weka-dev "3.9.3"]
