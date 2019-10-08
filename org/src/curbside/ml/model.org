@@ -94,18 +94,18 @@ We will define multimethods for all of these operations. These multimethods will
   single trained model. It includes data preparation and post-processing
   operations required by all models. Such operations include:
   - Feature selection
-  - Feature scaling
+  - Feature scaling (optional)
   - Querying a model prediction
-  - Scaling the output of the model"
+  - Scaling the output of the model (optional)"
   ([algorithm model selected-features hyperparameters feature-map]
-   (infer algorithm model selected-features nil nil nil feature-map))
+   (infer algorithm model selected-features hyperparameters nil nil nil feature-map))
   ([algorithm model selected-features hyperparameters feature-scaling-fns label-scaling-fns scale-factors feature-map]
-  (->> feature-map
-       (parse-feature-map selected-features)
-       (feature-scaling feature-scaling-fns scale-factors)
-       (conversion/feature-map-to-vector selected-features)
-       (predict algorithm model selected-features hyperparameters)
-       (unscale-inference label-scaling-fns scale-factors))))
+   (->> feature-map
+        (parse-feature-map selected-features)
+        (feature-scaling feature-scaling-fns scale-factors)
+        (conversion/feature-map-to-vector selected-features)
+        (predict algorithm model selected-features hyperparameters)
+        (unscale-inference label-scaling-fns scale-factors))))
 #+END_SRC
 
 * Evaluation
@@ -116,19 +116,13 @@ We will define multimethods for all of these operations. These multimethods will
   (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
 
 (defn- evaluate-fold
-  [algorithm config scale-factors hyperparameters training-set validation-set eval-atoms mode predictions]
+  [algorithm selected-features hyperparameters feature-scaling-fns label-scaling-fns scale-factors training-set validation-set eval-atoms predictor-type predictions]
   (let [problem (apply concat training-set)
         model (train algorithm problem hyperparameters)]
     (doseq [[target & features] validation-set]
-      (let [feature-names (-> config
-                              :features-selection
-                              :selected-features)
-
-            feature-scaling-fns (get-in config [:scale-training-sets :feature-scaling-fns])
-            label-scaling-fns (get-in config [:scale-training-sets :label-scaling-fns])
-            features-map (into {} (map vector feature-names features))
-            predicted-value (infer algorithm model feature-names hyperparameters feature-scaling-fns label-scaling-fns scale-factors features-map)]
-        (when (= mode :classification)
+      (let [features-map (into {} (map vector selected-features features))
+            predicted-value (infer algorithm model selected-features hyperparameters feature-scaling-fns label-scaling-fns scale-factors features-map)]
+        (when (= predictor-type :classification)
           (.add predictions (classify (Double/parseDouble target) predicted-value)))
         (let [diff (- (parsing/parse-double target) predicted-value)
               abs-error (Math/abs diff)
@@ -143,11 +137,11 @@ We will define multimethods for all of these operations. These multimethods will
   training set CSV file as input and the number of `k-folds` to use for the
   cross validation. If `multithreads` is `true`, then each fold will be
   processed on its own thread in parallel."
-  [algorithm training-set-file config scale-factors hyperparameters
-   & {:keys [k-folds multithreads mode]}]
-  {:pre [(some #{:classification :regression} #{mode})]}
+  [algorithm predictor-type selected-features hyperparameters training-set-file scale-factors
+   & {:keys [k-folds multithreads feature-scaling-fns label-scaling-fns]}]
+  {:pre [(some #{:classification :regression} #{predictor-type})]}
   (let [k-folds (or k-folds 10)
-        mode (or mode :classification)
+        mode (or predictor-type :classification)
         multithreads (or multithreads false)
         [_headers & training-set] (with-open [in-file (io/reader training-set-file)]
                                     (doall
@@ -165,18 +159,22 @@ We will define multimethods for all of these operations. These multimethods will
       (when (<= processed-folds k-folds)
         (if multithreads
           (swap! futures conj (future (evaluate-fold algorithm
-                                                     config
-                                                     scale-factors
+                                                     selected-features
                                                      hyperparameters
+                                                     feature-scaling-fns
+                                                     label-scaling-fns
+                                                     scale-factors
                                                      training-set
                                                      validation-set
                                                      eval-atoms
                                                      mode
                                                      predictions)))
           (evaluate-fold algorithm
-                         config
-                         scale-factors
+                         selected-features
                          hyperparameters
+                         feature-scaling-fns
+                         label-scaling-fns
+                         scale-factors
                          training-set
                          validation-set
                          eval-atoms
@@ -193,9 +191,10 @@ We will define multimethods for all of these operations. These multimethods will
     (metrics/model-metrics mode predictions eval-atoms)))
 
 (defn evaluate
-  [algorithm training-set-file config scale hyperparameters
-   & {:keys [_k-folds _multithreads _mode] :as options}]
-  (cross-validate algorithm training-set-file config scale hyperparameters options))
+  "Only cross-validate method is supported at the moment."
+  [algorithm predictor-type selected-features hyperparameters training-set-file scale
+   & {:keys [_k-folds _multithreads _feature-scaling-fns _label-scaling-fns] :as options}]
+  (cross-validate algorithm predictor-type selected-features hyperparameters training-set-file scale hyperparameters options))
 #+END_SRC
 
 * Hyperparameters optimization

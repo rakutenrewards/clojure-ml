@@ -40,7 +40,7 @@ The main metrics involved in =regression= tasks are:
 #+BEGIN_SRC clojure
 (ns curbside.ml.metrics
   (:require
-   [curbside.ml.stats :as stats]
+   [curbside.ml.utils.stats :as stats]
    [curbside.ml.utils.parsing :as parsing])
   (:import (weka.classifiers.evaluation ConfusionMatrix ThresholdCurve)))
 #+END_SRC

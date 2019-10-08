@@ -1,10 +1,9 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../src/curbside/ml/stats.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/utils/stats.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
 #+OPTIONS: toc:2
 
 #+TITLE: Stats
 
 * Table of Contents                                            :toc:noexport:
-- [[#introduction][Introduction]]
 - [[#namespace-definition][Namespace definition]]
 - [[#kappa-statistic][Kappa statistic]]
   - [[#interpreting-kappa-values][Interpreting Kappa Values]]
@@ -16,11 +15,9 @@
   - [[#namespaces-definition][Namespaces definition]]
   - [[#kappa-tests][Kappa tests]]
 
-* Introduction
-
 * Namespace definition
 #+BEGIN_SRC clojure
-(ns curbside.ml.stats
+(ns curbside.ml.utils.stats
   (:import
    (weka.classifiers.evaluation ConfusionMatrix)))
 #+END_SRC
@@ -131,7 +128,7 @@ Some basic statistics that we want to compute are the number (and the percentage
 *** Test Classification
 
 #+NAME: test classification statistics
-#+BEGIN_SRC clojure :tangle ../../../../../test-prediction/curbside/prediction/models/evaluation_test.clj
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/stats_test.clj
 (deftest test-classification-statistic
   (testing "Test classification statistics"
     (is (= (correctly-classified (get-test-confusion-matrix-1)) 35.0))
@@ -168,16 +165,14 @@ Calculate the root mean absolute error of a classification or regression problem
   (Math/sqrt (/ sum-square-error n)))
 #+END_SRC
 
-
 * Tests
-
 ** Namespaces definition
 
-#+BEGIN_SRC clojure :tangle ../../../../test/curbside/ml/stats_test.clj
-(ns curbside.ml.stats-test
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/stats_test.clj
+(ns curbside.ml.utils.stats-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.stats :as stats])
+   [curbside.ml.utils.stats :as stats])
   (:import
    (weka.classifiers.evaluation ConfusionMatrix NominalPrediction)))
 #+END_SRC
@@ -185,7 +180,7 @@ Calculate the root mean absolute error of a classification or regression problem
 ** Kappa tests
 
 #+NAME: kappa statistic tests
-#+BEGIN_SRC clojure :tangle ../../../../test/curbside/ml/stats_test.clj
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/stats_test.clj
 (defn- get-test-confusion-matrix-1
   "Create a confusion matrix composed of multiple predictions for testing
   purposes. The confusion matrix includes 22 cats (0.0) that were categorized as cat,
