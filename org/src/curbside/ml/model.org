@@ -56,7 +56,7 @@ We will define multimethods for all of these operations. These multimethods will
     algorithm))
 
 (defmulti predict
-  (fn [algorithm model feature-vector]
+  (fn [algorithm model seleted-features hyperparameters feature-vector]
     algorithm))
 
 (defmulti dispose
@@ -83,11 +83,6 @@ We will define multimethods for all of these operations. These multimethods will
     (scaling/scale-feature-map feature-scaling-fns scale-factors feature-map)
     feature-map))
 
-(defn- prediction
-  [selected-features algorithm model feature-map]
-  (let [feature-vector (conversion/feature-map-to-vector selected-features feature-map)]
-    (predict algorithm model feature-vector)))
-
 (defn- unscale-inference
   [label-scaling-fns scale-factors prediction]
   (if label-scaling-fns
@@ -102,13 +97,14 @@ We will define multimethods for all of these operations. These multimethods will
   - Feature scaling
   - Querying a model prediction
   - Scaling the output of the model"
-  ([algorithm model selected-features feature-map]
+  ([algorithm model selected-features hyperparameters feature-map]
    (infer algorithm model selected-features nil nil nil feature-map))
-  ([algorithm model selected-features feature-scaling-fns label-scaling-fns scale-factors feature-map]
+  ([algorithm model selected-features hyperparameters feature-scaling-fns label-scaling-fns scale-factors feature-map]
   (->> feature-map
        (parse-feature-map selected-features)
        (feature-scaling feature-scaling-fns scale-factors)
-       (prediction selected-features algorithm model)
+       (conversion/feature-map-to-vector selected-features)
+       (predict algorithm model selected-features hyperparameters)
        (unscale-inference label-scaling-fns scale-factors))))
 #+END_SRC
 
@@ -127,10 +123,11 @@ We will define multimethods for all of these operations. These multimethods will
       (let [feature-names (-> config
                               :features-selection
                               :selected-features)
+
             feature-scaling-fns (get-in config [:scale-training-sets :feature-scaling-fns])
             label-scaling-fns (get-in config [:scale-training-sets :label-scaling-fns])
             features-map (into {} (map vector feature-names features))
-            predicted-value (infer algorithm model feature-names feature-scaling-fns label-scaling-fns scale-factors features-map)]
+            predicted-value (infer algorithm model feature-names hyperparameters feature-scaling-fns label-scaling-fns scale-factors features-map)]
         (when (= mode :classification)
           (.add predictions (classify (Double/parseDouble target) predicted-value)))
         (let [diff (- (parsing/parse-double target) predicted-value)

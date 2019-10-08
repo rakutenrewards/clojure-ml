@@ -12,7 +12,7 @@
 - [[#log10-label-scaling][=log10-label= scaling]]
 - [[#scale-training-set][Scale training-set]]
 - [[#scale-feature-map-for-inference][Scale feature map for inference]]
-- [[#unit-tests][Unit Tests]]
+- [[#tests][Tests]]
   - [[#namespaces-definition-1][Namespaces definition]]
   - [[#test-min-max][Test =min-max=]]
   - [[#test-log10][Test =log10=]]
@@ -252,12 +252,12 @@ At inference time, we need to unscale the predicted value to obtain a prediction
           (reverse (map vector scaling-fns (:labels factors)))))
 #+END_SRC
 
-* Unit Tests
+* Tests
 ** Namespaces definition
 
 #+NAME: unit test namespaces
 #+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/training_sets/scaling_test.clj
-(ns curbside.prediction.training-sets.scaling-test
+(ns curbside.ml.training-sets.scaling-test
   (:require
    [clojure.test :refer [deftest is testing]]
    [curbside.ml.training-sets.scaling :as scaling]))

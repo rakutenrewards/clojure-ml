@@ -142,7 +142,7 @@ arrays when it creates them.
   (DMatrix. (.iterator [(->LabeledPoint vec)]) nil))
 
 (defn- predict
-  [model hyperparameters feature-vector]
+  [model _seleted-features hyperparameters feature-vector]
   (let [booster (:booster hyperparameters)
         num-trees (:num-rounds hyperparameters)
         ;; Pad to add a dummy label at the front of the vector.
@@ -163,8 +163,8 @@ arrays when it creates them.
      (nth 0))))
 
 (defmethod model/predict :xgboost
-  [_ model config feature-vector]
-  (predict model config feature-vector))
+  [_ model seleted-features hyperparameters feature-vector]
+  (predict model seleted-features hyperparameters feature-vector))
 #+END_SRC
 
 * Hyperparameters optimization

@@ -10,7 +10,7 @@
 - [[#csv-and-arff-training-set][CSV and ARFF training set]]
 - [[#csv-and-plain-data-structures][CSV and plain data structures]]
 - [[#map-and-vectors][Map and vectors]]
-- [[#unit-tests][Unit tests]]
+- [[#tests][Tests]]
   - [[#namespace-definition][Namespace definition]]
   - [[#csv-and-plain-data-structures-1][CSV and plain data structures]]
   - [[#maps-and-vectors][Maps and vectors]]
@@ -217,7 +217,7 @@ Where converting a training set to CSV, the order of the column is important, as
   (mapv (fn [n] (get feature-map n)) feature-names))
 #+END_SRC
 
-* Unit tests
+* Tests
 
 ** Namespace definition
 
@@ -226,8 +226,8 @@ Where converting a training set to CSV, the order of the column is important, as
   (:require
    [clojure.string :as string]
    [clojure.test :refer [deftest is testing]]
-   [curbside.prediction.training-sets.conversion :as conversion]
-   [curbside.prediction.test-utils :as tutils]))
+   [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.utils.tests :as tutils]))
 #+END_SRC
 
 ** CSV and plain data structures
