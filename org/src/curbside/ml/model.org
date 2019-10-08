@@ -1,0 +1,196 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../src/curbside/ml/model.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: ML Algorithms Interface
+
+* Table of Contents                                            :toc:noexport:
+- [[#namespace-definition][Namespace definition]]
+- [[#multimethods][Multimethods]]
+- [[#inference][Inference]]
+- [[#evaluation][Evaluation]]
+- [[#hyperparameters-optimization][Hyperparameters optimization]]
+
+* Namespace definition
+
+#+BEGIN_SRC clojure
+(ns curbside.ml.model
+  (:require
+   [clojure.data.csv :as csv]
+   [curbside.ml.utils.parsing :as parsing]
+   [curbside.ml.training-sets.scaling :as scaling]
+   [curbside.ml.training-sets.conversion :as conversion]))
+#+END_SRC
+
+* Multimethods
+
+All models implement a few common functions:
+
+1. =save= to persist a trained model to disk.
+2. =load= to load a trained model from disk.
+3. =train= to train the model on a given problem.
+4. =predict= to make a prediction
+5. =dispose= to free allocated memory, if applicable
+
+We will define multimethods for all of these operations. These multimethods will switch based on a keyword specifying the algorithm to use. Using a keyword allows us to easily specify the algorithm in the pipeline configs.
+
+#+BEGIN_SRC clojure
+(defmulti save
+  (fn [algorithm model file]
+    algorithm))
+
+(defmulti load
+  (fn [algorithm file]
+    algorithm))
+
+(defmulti load-from-bytes
+  (fn [algorithm bytes]
+    algorithm))
+
+(defmulti train
+  (fn [algorithm prob hyperparameters]
+    algorithm))
+
+(defmulti ^:private predict
+  (fn [algorithm model feature-vector]
+    algorithm))
+
+(defmulti dispose
+  (fn [algorithm model]
+    algorithm))
+
+(defmethod dispose :default
+  [_ _])
+#+END_SRC
+
+* Inference
+
+#+BEGIN_SRC clojure
+(defn- select-features
+  [selected-features feature-map]
+  (reduce-kv #(assoc % %2 (parsing/parse-double %3))
+             {}
+             (select-keys feature-map selected-features)))
+
+(defn- feature-scaling
+  [feature-scaling-fns scale-factors feature-map]
+  (if feature-scaling-fns
+    (scaling/scale-feature-map feature-scaling-fns scale-factors feature-map)
+    feature-map))
+
+(defn- prediction
+  [selected-features algorithm model feature-map]
+  (let [feature-vector (conversion/feature-map-to-vector selected-features feature-map)]
+    (predict algorithm model feature-vector)))
+
+(defn- unscale-inference
+  [label-scaling-fns scale-factors prediction]
+  (if label-scaling-fns
+    (scaling/unscale-inference label-scaling-fns scale-factors prediction)
+    prediction))
+
+(defn infer
+  "This function performs the inference steps to perform predictions using a
+  single trained model. It includes data preparation and post-processing
+  operations required by all models. Such operations include:
+  - Feature selection
+  - Feature scaling
+  - Querying a model prediction
+  - Scaling the output of the model"
+  ([algorithm model selected-features feature-map]
+   (prediction selected-features algorithm model feature-map))
+  ([algorithm model selected-features feature-scaling-fns label-scaling-fns scale-factors feature-map]
+  (->> feature-map
+       (select-features selected-features)
+       (feature-scaling feature-scaling-fns scale-factors)
+       (prediction selected-features algorithm model)
+       (unscale-inference label-scaling-fns scale-factors))))
+#+END_SRC
+
+* Evaluation
+
+#+BEGIN_SRC clojure
+(defn- evaluate-fold
+  [algorithm config scale-factors hyperparameters training-set validation-set eval-atoms mode predictions]
+  (let [problem (apply concat training-set)
+        model (train algorithm problem hyperparameters)]
+    (doseq [[target & features] validation-set]
+      (let [feature-names (-> config
+                              :features-selection
+                              :selected-features)
+            features-map (into {} (map vector feature-names features))
+            predicted-value (predict algorithm model config scale-factors features-map)]
+        (when (= mode :classification)
+          (.add predictions (prediction (Double/parseDouble target) predicted-value)))
+        (let [diff (- (parsing/parse-double target) predicted-value)
+              abs-error (Math/abs diff)
+              square-error (* diff diff)]
+          (swap! (:abs-error eval-atoms) #(+ abs-error %))
+          (swap! (:square-error eval-atoms) #(+ square-error %))
+          (swap! (:n eval-atoms) inc))))
+    (dispose algorithm model)))
+
+(defn- cross-validate
+  "Evaluate the performance of a model using k-fold cross-validation. Takes a
+  training set CSV file as input and the number of `k-folds` to use for the
+  cross validation. If `multithreads` is `true`, then each fold will be
+  processed on its own thread in parallel."
+  [algorithm training-set-file config scale-factors hyperparameters
+   & {:keys [k-folds multithreads mode]}]
+  {:pre [(some #{:classification :regression} #{mode})]}
+  (let [k-folds (or k-folds 10)
+        mode (or mode :classification)
+        multithreads (or multithreads false)
+        [_headers & training-set] (with-open [in-file (io/reader training-set-file)]
+                                    (doall
+                                     (csv/read-csv in-file)))
+        folds (partition-all (/ (count training-set) k-folds) (shuffle training-set))
+        eval-atoms {:n (atom 0)
+                    :abs-error (atom 0)
+                    :square-error (atom 0)}
+        predictions (java.util.ArrayList.)
+        futures (atom [])]
+
+    (loop [processed-folds 1
+           validation-set (first folds)
+           training-set (rest folds)]
+      (when (<= processed-folds k-folds)
+        (if multithreads
+          (swap! futures conj (future (evaluate-fold algorithm
+                                                     config
+                                                     scale-factors
+                                                     hyperparameters
+                                                     training-set
+                                                     validation-set
+                                                     eval-atoms
+                                                     mode
+                                                     predictions)))
+          (evaluate-fold algorithm
+                         config
+                         scale-factors
+                         hyperparameters
+                         training-set
+                         validation-set
+                         eval-atoms
+                         mode
+                         predictions))
+        (recur (inc processed-folds)
+               (first training-set)
+               (conj (rest training-set) validation-set))))
+
+    (when multithreads
+      (doseq [f @futures]
+        @f))
+
+    (calculate-metrics mode predictions eval-atoms)))
+
+(defn evaluate
+  [algorithm training-set-file config scale hyperparameters
+   & {:keys [k-folds multithreads mode] :as options}]
+  (cross-validate algorithm training-set-file config scale hyperparameters options))
+#+END_SRC
+
+* Hyperparameters optimization
+
+#+BEGIN_SRC clojure
+(defn optimize-hyperparameters [algorithm])
+#+END_SRC

@@ -1,0 +1,230 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/regression/xgboost.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: XGBoost Models
+
+* Table of Contents                                             :toc:noexport:
+- [[#introduction][Introduction]]
+  - [[#namespace-definition][Namespace definition]]
+- [[#train][Train]]
+- [[#dispose][Dispose]]
+- [[#predict][Predict]]
+- [[#hyperparameters-optimization][Hyperparameters optimization]]
+- [[#save-and-load][Save and load]]
+
+* Introduction
+
+This document defines a simple Clojure interface to XGBoost, a library for gradient-boosted decision trees. This library gives extremely good performance on many problems and is becoming very popular. You can learn more about it at [[https://xgboost.readthedocs.io/en/latest/][the XGBoost website]].
+
+** Namespace definition
+
+#+BEGIN_SRC clojure
+(ns curbside.ml.regression.xgboost
+  (:refer-clojure :exclude [load])
+  (:require
+   [clojure.java.io :as io]
+   [clojure.walk :as walk]
+   [curbside.ml.interface :as interface]
+   [curbside.ml.utils.parsing :as parsing])
+  (:import
+   (ml.dmlc.xgboost4j LabeledPoint)
+   (ml.dmlc.xgboost4j.java Booster DMatrix XGBoost XGBoostError)))
+#+END_SRC
+
+* Train
+
+To train, we just need to load the problem into a DMatrix, convert the
+parameters into a Java Map, and call the =train= method on =XGBoost=.
+
+For the parameters to XGBoost
+
+#+BEGIN_SRC clojure
+(defn- filepath->DMatrix
+  [filepath]
+  (DMatrix. filepath))
+
+(defn- get-non-nil-values-indices
+  "Get a vector of non-nil indices from a vector `v`"
+  [vec]
+  (->> vec
+       (keep-indexed (fn [i v]
+                       (when v
+                         i)))
+       int-array))
+
+(defn- ->LabeledPoint
+  "Create a labeled point from a vector. The vector can be dense or sparse."
+  [v]
+  (LabeledPoint.
+   (->> v
+        first
+        parsing/parse-float)
+   (->> v
+        rest
+        (map parsing/parse-float)
+        get-non-nil-values-indices)
+   (->> v
+        rest
+        (keep parsing/parse-float)
+        float-array)))
+
+(defn- coll->DMatrix
+  [coll]
+  (DMatrix. (.iterator (map ->LabeledPoint coll)) nil))
+
+(defn- problem
+  [filepath-or-coll]
+  (if (string? filepath-or-coll)
+    (filepath->DMatrix filepath-or-coll)
+    (coll->DMatrix filepath-or-coll)))
+
+(defn- params->map
+  [params]
+  (walk/stringify-keys params))
+
+(defn- train
+  [prob params]
+  (XGBoost/train
+   (problem prob)
+   (params->map params)
+   (int (or (:num-rounds params) 10))
+   {}
+   (:obj-fn params)
+   (:eval-fn params)))
+
+(defmethod interface/train-model :xgboost
+  [_ prob params]
+  (train prob params))
+#+END_SRC
+
+* Dispose
+
+XGBoost is a thin wrapper around a C++ library, so most memory is allocated off-heap. We need to clean it up manually by calling =dispose=. If we do not, the GC will erroneously believe that the allocated models are very small, when they could actually be multiple megabytes in size. This causes the GC to abstain from collecting them, and the server will eventually run out of memory.
+
+#+BEGIN_SRC clojure
+(defn- dispose
+  "Fees the memory allocated to given model."
+  [model]
+  (locking model
+    (.dispose model)))
+
+(defmethod interface/dispose :xgboost
+  [_ model]
+  (dispose model))
+#+END_SRC
+
+* Predict
+
+The XGBoost library uses its own matrix data type, called DMatrix. We define
+some functions to convert data to/from DMatrices.
+
+Note that there is some strange behavior in the XGBoost library that depends on
+how a DMatrix was constructed. If we use the DMatrix constructor that creates a
+DMatrix from a path to a libsvm training set file, the model that results from
+training on that DMatrix will expect one extra input at the front of its input
+array, which the model ignores. Currently, our training pipeline uses that
+constructor, so our predict function adds the extra input to the front of the
+arrays when it creates them.
+
+#+BEGIN_SRC clojure
+(defn- get-xgboost-handle
+  "Gets the internal handle field that points to the underlying C++ Booster
+   object."
+  [^Booster obj]
+  (let [m (.. obj getClass (getDeclaredField "handle"))]
+    (. m (setAccessible true))
+    (. m (get obj))))
+
+(defn- ->predict-DMatrix
+  "Convert a 1D vec of floats into an DMatrix meant for use as an input to a
+  Booster's .predict() method."
+  [vec]
+  (DMatrix. (.iterator [(->LabeledPoint vec)]) nil))
+
+(defn- predict
+  [model config feature-vector]
+  (let [booster (get-in config [:train-models :hyperparameters :booster])
+        num-trees (get-in config [:train-models :hyperparameters :num-rounds])
+        ;; Pad to add a dummy label at the front of the vector.
+        ;; It will be ignored when doing prediction
+        dmatrix (->predict-DMatrix (into [1.0 2.0] feature-vector))]
+    (->
+     ;; lock for mutual exclusion w.r.t. dispose.
+     (locking model
+       ;; hack: most xgboost code paths check that handle is not null and throw
+       ;; an error, but sometimes calling predict just segfaults when the
+       ;; handle is a null pointer.
+       (if (= 0 (get-xgboost-handle model))
+         (throw (XGBoostError. "already disposed."))
+         (if (= booster "dart")
+           (.predict model dmatrix false num-trees)
+           (.predict model dmatrix))))
+     (nth 0)
+     (nth 0))))
+
+(defmethod interface/predict :xgboost
+  [_ model config feature-vector]
+  (predict model config feature-vector))
+#+END_SRC
+
+* Hyperparameters optimization
+
+For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html][The docs]].
+
+| hyper-parameter          | description                                           | value type | possible values                               |                    default |
+|--------------------------+-------------------------------------------------------+------------+-----------------------------------------------+----------------------------|
+| =alpha=                  | L1 regularization term.                               | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
+| =base_score=             | Initial prediction score for all instances.           | =decimal=  | =[0.0,...]=                                   |                        0.5 |
+| =booster=                | Which base model to use                               | string     | =[gbtree, gblinear, dart]=                    |                     gbtree |
+| =colsample_bylevel=      | Subsample ratio of columns for each split by level.   | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
+| =colsample_bytree=       | Subsample ratio of columns when constructing trees.   | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
+| =eta=                    | Step size shrinkage for updates.                      | =decimal=  | =[0.0,...,1.0]=                               |                        0.3 |
+| =gamma=                  | Min loss reduction required to add a partition.       | =decimal=  | =[0.0, ...]=                                  |                          0 |
+| =grow_policy=            | Controls how new nodes are added.                     | =string=   | =[depthwise, lossguide]=                      |                  depthwise |
+| =lambda=                 | L2 regularization term.                               | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
+| =max_bin=                | For hist tree_method, max number of bins.             | =integer=  | =[0,...]=                                     |                        256 |
+| =max_delta_step=         | Max delta step for each leaf output.                  | =decimal=  | =[0,...]=                                     |                          0 |
+| =max_depth=              | Max tree depth.                                       | =integer=  | =[0,...]=                                     |                          6 |
+| =max_leaves=             | Max number of leaves for lossguide grow_policy        | =integer=  | =[0,...]=                                     |                          0 |
+| =min_child_weight=       | Min sum of instance weight needed in a child node.    | =decimal=  | =[0,...]=                                     |                          1 |
+| =normalize_type=         | Normalization algorithm for dart booster.             | =string=   | =[tree, forest]=                              |                       tree |
+| =nthread=                | Number of parallel training threads                   | int        | =[1, ...]=                                    | number of cores on machine |
+| =objective=              | Objective function to use.                            | =string=   | Many values. See official docs.               |                 reg:linear |
+| =one_drop=               | Flag for dart booster: always drop at least one tree. | =integer=  | =[0,1]=                                       |                          0 |
+| =predictor=              | Whether to compute predictions with CPU or GPU        | =string=   | =[cpu_predictor, gpu_predictor]=              |              cpu_predictor |
+| =process_type=           | Type of boosting process to run.                      | =string=   | =[default, update]=                           |                    default |
+| =rate_drop=              | Dropout rate for dart booster.                        | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
+| =refresh_leaf=           | Param for the refresh updater plugin                  | =integer=  | =[0,1]=                                       |                          1 |
+| =sample_type=            | Sampling algorithm for dart booster.                  | =string=   | =[uniform, weighted]=                         |                    uniform |
+| =scale_pos_weight=       | Balance of pos/neg weights, for unbalanced data.      | =decimal=  | =[0.0...1.0]=                                 |                        1.0 |
+| =seed=                   | Random seed.                                          | =integer=  | Any.                                          |                          0 |
+| =silent=                 | Whether to print log messages while training          | int        | =[0,...,1]=                                   |                          0 |
+| =sketch_eps=             | For approx tree_method.                               | =decimal=  | =[0.0...1.0]=                                 |                       0.03 |
+| =skip_drop=              | Probability of skipping dropout for dart booster.     | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
+| =subsample=              | Subsample ratio for training instances                | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
+| =tree_method=            | Tree construction algorithm.                          | =string=   | =[auto,exact,approx,hist,gpu_exact,gpu_hist]= |                       auto |
+| =tweedie_variance_power= | Param for objective=reg:tweedie                       | =decimal=  | =[0.0,...,1.0]=                               |                        1.5 |
+| =updater=                | Comma-separated string of tree updaters.              | =string=   | See official docs.                            |        grow_colmaker,prune |
+| =updater=                | Algorithm for gblinear booster.                       | =string=   | =[shotgun, coord_descent]=                    |                    shotgun |
+
+* Save and load
+
+The standard =save-model= and =load-model= functions can be defined easily
+using standard XGBoost methods.
+
+#+NAME: model management
+#+BEGIN_SRC clojure
+(defmethod interface/save-model :xgboost
+  [_ model file]
+  (.saveModel model file)
+  [file])
+
+(defmethod interface/load-model :xgboost
+  [_ file]
+  (XGBoost/loadModel file))
+
+(defmethod interface/load-model-from-bytes :xgboost
+  [_ bytes]
+  (with-open [input (io/input-stream bytes)]
+    (XGBoost/loadModel input)))
+#+END_SRC
