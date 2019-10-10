@@ -7,7 +7,7 @@
 - [[#introduction][Introduction]]
   - [[#namespaces-definition][Namespaces definition]]
 - [[#dispatch-function][Dispatch function]]
-- [[#scale-factors-structure][Scale factors structure]]
+- [[#scaling-factors-structure][Scaling factors structure]]
 - [[#min-max-scaling][=min-max= scaling]]
 - [[#log10-label-scaling][=log10-label= scaling]]
 - [[#scale-training-set][Scale training-set]]
@@ -70,7 +70,7 @@ The key distinction between the two types of scaling is that label scaling *also
                       map))
 #+END_SRC
 
-* Scale factors structure
+* Scaling factors structure
 
 Given a training set, a =factors= data structure is produced and saved on S3. This allows to reproduce the same scaling at inference that we applied at training time.
 
@@ -325,7 +325,7 @@ At inference time, we need to unscale the predicted value to obtain a prediction
 
 #+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/training_sets/scaling_test.clj
 (def a-training-set (repeat 3 a-feature-map))
-(def training-set-scale-factors {:features [min-max-features-factors]
+(def training-set-scaling-factors {:features [min-max-features-factors]
                                  :labels [{}]})
 
 (defn is-training-set-example-scaled?
@@ -340,7 +340,7 @@ At inference time, we need to unscale the predicted value to obtain a prediction
   (testing "given a training set, when scaling, all features and labels are scaled"
     (let [scaled-set (scaling/scale-training-set [:min-max]
                                                  [:log10]
-                                                 training-set-scale-factors
+                                                 training-set-scaling-factors
                                                  a-training-set)]
       (doseq [example scaled-set]
         (is-training-set-example-scaled? example)))))
@@ -351,7 +351,7 @@ At inference time, we need to unscale the predicted value to obtain a prediction
 #+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/training_sets/scaling_test.clj
 (deftest test-unscale-inference
   (testing "given an inferred value, when unscaling, the value is unscaled"
-    (is (== 0.1 (scaling/unscale-inference [:log10] training-set-scale-factors -1))))
+    (is (== 0.1 (scaling/unscale-inference [:log10] training-set-scaling-factors -1))))
   (testing "given multiple scaling functions, when unscaling, the value is unscaled."
     (let [factors {:features [] :labels [{:min 0 :max 100} {}]}]
       (is (== 100 (scaling/unscale-inference [:min-max :log10] factors 0))))))

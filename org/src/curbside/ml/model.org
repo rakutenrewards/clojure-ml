@@ -43,11 +43,11 @@ We will define multimethods for all of these operations. These multimethods will
 
 #+BEGIN_SRC clojure
 (defmulti save
-  (fn [algorithm model file]
+  (fn [algorithm model filepath]
     algorithm))
 
 (defmulti load
-  (fn [algorithm file]
+  (fn [algorithm filepath]
     algorithm))
 
 (defmulti load-from-bytes
@@ -82,15 +82,15 @@ We will define multimethods for all of these operations. These multimethods will
              (select-keys feature-map selected-features)))
 
 (defn- feature-scaling
-  [feature-scaling-fns scale-factors feature-map]
+  [feature-scaling-fns scaling-factors feature-map]
   (if feature-scaling-fns
-    (scaling/scale-feature-map feature-scaling-fns scale-factors feature-map)
+    (scaling/scale-feature-map feature-scaling-fns scaling-factors feature-map)
     feature-map))
 
 (defn- unscale-inference
-  [label-scaling-fns scale-factors prediction]
+  [label-scaling-fns scaling-factors prediction]
   (if label-scaling-fns
-    (scaling/unscale-inference label-scaling-fns scale-factors prediction)
+    (scaling/unscale-inference label-scaling-fns scaling-factors prediction)
     prediction))
 
 (defn infer
@@ -102,13 +102,13 @@ We will define multimethods for all of these operations. These multimethods will
   - Querying a model prediction
   - Scaling the output of the model (optional)"
   [algorithm model selected-features hyperparameters feature-map
-   & {:keys [scale-factors feature-scaling-fns label-scaling-fns]}]
+   & {:keys [scaling-factors feature-scaling-fns label-scaling-fns]}]
   (->> feature-map
        (parse-feature-map selected-features)
-       (feature-scaling feature-scaling-fns scale-factors)
+       (feature-scaling feature-scaling-fns scaling-factors)
        (conversion/feature-map-to-vector selected-features)
        (predict algorithm model selected-features hyperparameters)
-       (unscale-inference label-scaling-fns scale-factors)))
+       (unscale-inference label-scaling-fns scaling-factors)))
 #+END_SRC
 
 * Evaluation
@@ -119,12 +119,12 @@ We will define multimethods for all of these operations. These multimethods will
   (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
 
 (defn- evaluate-fold
-  [algorithm selected-features hyperparameters feature-scaling-fns label-scaling-fns scale-factors training-set validation-set eval-atoms predictor-type predictions]
+  [algorithm selected-features hyperparameters feature-scaling-fns label-scaling-fns scaling-factors training-set validation-set eval-atoms predictor-type predictions]
   (let [training-set (apply concat training-set)
         model (train algorithm training-set hyperparameters)]
     (doseq [[target & features] validation-set]
       (let [features-map (into {} (map vector selected-features features))
-            predicted-value (infer algorithm model selected-features hyperparameters feature-scaling-fns label-scaling-fns scale-factors features-map)]
+            predicted-value (infer algorithm model selected-features hyperparameters feature-scaling-fns label-scaling-fns scaling-factors features-map)]
         (when (= predictor-type :classification)
           (.add predictions (classify (Double/parseDouble target) predicted-value)))
         (let [diff (- (parsing/parse-double target) predicted-value)
@@ -141,7 +141,7 @@ We will define multimethods for all of these operations. These multimethods will
   cross validation. If `multithreads` is `true`, then each fold will be
   processed on its own thread in parallel."
   [algorithm predictor-type selected-features hyperparameters training-set-file
-   & {:keys [k-folds multithreads scale-factors feature-scaling-fns label-scaling-fns]}]
+   & {:keys [k-folds multithreads scaling-factors feature-scaling-fns label-scaling-fns]}]
   {:pre [(some #{:classification :regression} #{predictor-type})]}
   (let [k-folds (or k-folds 10)
         mode (or predictor-type :classification)
@@ -166,7 +166,7 @@ We will define multimethods for all of these operations. These multimethods will
                                                      hyperparameters
                                                      feature-scaling-fns
                                                      label-scaling-fns
-                                                     scale-factors
+                                                     scaling-factors
                                                      training-set-folds
                                                      validation-set
                                                      eval-atoms
@@ -177,7 +177,7 @@ We will define multimethods for all of these operations. These multimethods will
                          hyperparameters
                          feature-scaling-fns
                          label-scaling-fns
-                         scale-factors
+                         scaling-factors
                          training-set-folds
                          validation-set
                          eval-atoms
@@ -196,22 +196,21 @@ We will define multimethods for all of these operations. These multimethods will
 (defn evaluate
   "Only cross-validate method is supported at the moment."
   [algorithm predictor-type selected-features hyperparameters training-set-file
-   & {:keys [_k-folds _multithreads _scale-factors _feature-scaling-fns _label-scaling-fns] :as options}]
+   & {:keys [_k-folds _multithreads _scaling-factors _feature-scaling-fns _label-scaling-fns] :as options}]
   (cross-validate algorithm predictor-type selected-features hyperparameters training-set-file hyperparameters options))
 #+END_SRC
 
 * Hyperparameters optimization
 
 #+BEGIN_SRC clojure
-(defn grid-search
-  [algorithm predictor-type selected-features hyperparameters training-set-file
-   & {:keys [selection-metric k-folds threads-pool scale-factors feature-scaling-fns label-scaling-fns]}]
+(defn- grid-search
+  [algorithm predictor-type selected-features grid-parameters training-set-file
+   & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
   (let [selection-metric (or selection-metric :roc-auc)
         k-folds (or k-folds 2)
         thread-count (or threads-pool 1)
-        params (dissoc hyperparameters :k-folds)
-        params-keys (keys params)
-        combos (->> (apply combinatorics/cartesian-product (vals params))
+        params-keys (keys grid-parameters)
+        combos (->> (apply combinatorics/cartesian-product (vals grid-parameters))
                     (map #(into {} (map (fn [x y] [x y])
                                         params-keys
                                         %))))
@@ -221,7 +220,7 @@ We will define multimethods for all of these operations. These multimethods will
                                       selected-features
                                       hyperparameters
                                       training-set-file
-                                      scale-factors
+                                      :scaling-factors scaling-factors
                                       :k-folds k-folds
                                       :feature-scaling-fns feature-scaling-fns
                                       :label-scaling-fns label-scaling-fns)]
@@ -239,13 +238,13 @@ We will define multimethods for all of these operations. These multimethods will
     best-evaluation))
 
 (defn optimize-hyperparameters
-  [algorithm predictor-type selected-features hyperparameters training-set-file
-   & {:keys [selection-metric k-folds threads-pool scale-factors feature-scaling-fns label-scaling-fns]}]
-  (grid-search algorithm predictor-type selected-features hyperparameters training-set-file
+  [algorithm predictor-type selected-features grid-parameters training-set-file
+   & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
+  (grid-search algorithm predictor-type selected-features grid-parameters training-set-file
                :selection-metric selection-metric
                :k-folds k-folds
                :threads-pool threads-pool
-               :scale-factors scale-factors
+               :scaling-factors scaling-factors
                :feature-scaling-fns feature-scaling-fns
                :label-scaling-fns label-scaling-fns))
 #+END_SRC
