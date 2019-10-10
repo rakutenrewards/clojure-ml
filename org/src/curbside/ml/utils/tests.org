@@ -10,29 +10,20 @@
 
 * Introduction
 
-This file contains utilities functions for testing purposes.
+This file contains utility functions for testing purposes.
 
 ** Namespace Definition
 
 #+NAME: test-fixtures namespace
 #+BEGIN_SRC clojure
 (ns curbside.ml.utils.tests
-  "Namespace that regroups utilities used in tests."
-  (:require
-   [clojure.data.csv :as csv]
-   [clojure.java.io :as io])
   (:import
-   [java.io ByteArrayInputStream File]
-   [java.nio.charset StandardCharsets]))
+   [java.io File]))
 #+END_SRC
 
 * File utilities
 
 #+BEGIN_SRC clojure
-(defn resource-name-to-path-str
-  [r]
-  (.getPath (io/resource r)))
-
 (defn create-temp-csv-path
   ([]
    (let [file (doto (File/createTempFile "test_" ".csv")
@@ -42,15 +33,4 @@ This file contains utilities functions for testing purposes.
    (let [path (create-temp-csv-path)]
      (spit path content)
      path)))
-
-(defn n-csv-rows
-  [path]
-  (with-open [reader (io/reader path)]
-    (count (rest (csv/read-csv reader)))))
-
-(defn string->stream
-  "Transform a string to a slurpable input stream. Handy to stub file reading."
-  [s]
-  (-> (.getBytes s StandardCharsets/UTF_8)
-      (ByteArrayInputStream.)))
 #+END_SRC

@@ -1,4 +1,4 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/regression/xgboost.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/algorithms/xgboost.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
 #+OPTIONS: toc:2
 
 #+TITLE: XGBoost Models
@@ -19,7 +19,7 @@ This document defines a simple Clojure interface to XGBoost, a library for gradi
 ** Namespace definition
 
 #+BEGIN_SRC clojure
-(ns curbside.ml.regression.xgboost
+(ns curbside.ml.algorithms.xgboost
   (:refer-clojure :exclude [load])
   (:require
    [clojure.java.io :as io]
@@ -33,7 +33,7 @@ This document defines a simple Clojure interface to XGBoost, a library for gradi
 
 * Train
 
-To train, we just need to load the problem into a DMatrix, convert the
+To train, we just need to load the training set into a DMatrix, convert the
 parameters into a Java Map, and call the =train= method on =XGBoost=.
 
 For the parameters to XGBoost
@@ -72,7 +72,7 @@ For the parameters to XGBoost
   [coll]
   (DMatrix. (.iterator (map ->LabeledPoint coll)) nil))
 
-(defn- problem
+(defn- training-set->DMatrix
   [filepath-or-coll]
   (if (string? filepath-or-coll)
     (filepath->DMatrix filepath-or-coll)
@@ -83,9 +83,9 @@ For the parameters to XGBoost
   (walk/stringify-keys params))
 
 (defn- train
-  [prob params]
+  [training-set-path params]
   (XGBoost/train
-   (problem prob)
+   (training-set->DMatrix training-set-path)
    (params->map params)
    (int (or (:num-rounds params) 10))
    {}
@@ -93,8 +93,8 @@ For the parameters to XGBoost
    (:eval-fn params)))
 
 (defmethod model/train :xgboost
-  [_ prob params]
-  (train prob params))
+  [_ training-set-path params]
+  (train training-set-path params))
 #+END_SRC
 
 * Dispose
@@ -159,8 +159,7 @@ arrays when it creates them.
          (if (= booster "dart")
            (.predict model dmatrix false num-trees)
            (.predict model dmatrix))))
-     (nth 0)
-     (nth 0))))
+     (ffirst))))
 
 (defmethod model/predict :xgboost
   [_ model seleted-features hyperparameters feature-vector]
@@ -215,13 +214,13 @@ using standard XGBoost methods.
 #+NAME: model management
 #+BEGIN_SRC clojure
 (defmethod model/save :xgboost
-  [_ model file]
-  (.saveModel model file)
-  [file])
+  [_ model filepath]
+  (.saveModel model filepath)
+  [filepath])
 
 (defmethod model/load :xgboost
-  [_ file]
-  (XGBoost/loadModel file))
+  [_ filepath]
+  (XGBoost/loadModel filepath))
 
 (defmethod model/load-from-bytes :xgboost
   [_ bytes]

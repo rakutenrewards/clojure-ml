@@ -45,7 +45,7 @@ The key distinction between the two types of scaling is that label scaling *also
 #+BEGIN_SRC clojure
 (defmulti compute-factors
   "Given a scaling function, `compute-factors` produces the map of factor
-  paramters passed to each `apply-scaling` and `apply-uncaling` call."
+  parameters passed to each `apply-scaling` and `apply-uncaling` call."
   (fn [scaling-fn _training-set]
     scaling-fn))
 
@@ -224,10 +224,8 @@ Next, we define functions to scale a whole training set. We define functions to 
   "Scales a training set encoded in the file at `input-csv-path`. The scaled set
   is outputted at `outpt-csv-file`, and the scaling factors used to perform
   scaling are saved at `edn-factors-path`."
-  [config input-csv-path output-csv-file edn-factors-path]
+  [input-csv-path output-csv-file edn-factors-path feature-scaling-fns label-scaling-fns]
   (let [training-set        (conversion/csv-to-maps input-csv-path)
-        feature-scaling-fns (get-in config [:scale-training-sets :feature-scaling-fns])
-        label-scaling-fns   (get-in config [:scale-training-sets :label-scaling-fns])
         factors             (scaling-factors feature-scaling-fns label-scaling-fns training-set)
         scaled-set          (scale-training-set feature-scaling-fns label-scaling-fns factors training-set)]
     (spit edn-factors-path (pr-str factors))

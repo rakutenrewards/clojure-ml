@@ -6,14 +6,14 @@
 * Table of Contents                                            :toc:noexport:
 - [[#namespace-definition][Namespace definition]]
 - [[#kappa-statistic][Kappa statistic]]
-  - [[#interpreting-kappa-values][Interpreting Kappa Values]]
+  - [[#interpreting-kappa-values][Interpreting kappa values]]
   - [[#classification-statistics][Classification statistics]]
-    - [[#test-classification][Test Classification]]
   - [[#mean-absolute-error][Mean Absolute Error]]
   - [[#root-mean-square-error][Root Mean Square Error]]
 - [[#tests][Tests]]
   - [[#namespaces-definition][Namespaces definition]]
   - [[#kappa-tests][Kappa tests]]
+  - [[#classification-tests][Classification tests]]
 
 * Namespace definition
 #+BEGIN_SRC clojure
@@ -80,7 +80,7 @@ We implement the Kappa statistic by getting the number of predictions and the nu
     (/ (- observed-accuracy expected-accuracy) (- 1 expected-accuracy))))
 #+END_SRC
 
-** Interpreting Kappa Values
+** Interpreting kappa values
 
 What is a good Kappa value?
 
@@ -123,18 +123,6 @@ Some basic statistics that we want to compute are the number (and the percentage
 (defn incorrectly-classified-percent
   [confusion-matrix]
   (/ (incorrectly-classified confusion-matrix) (.total confusion-matrix)))
-#+END_SRC
-
-*** Test Classification
-
-#+NAME: test classification statistics
-#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/stats_test.clj
-(deftest test-classification-statistic
-  (testing "Test classification statistics"
-    (is (= (correctly-classified (get-test-confusion-matrix-1)) 35.0))
-    (is (= (correctly-classified-percent (get-test-confusion-matrix-1)) 0.6862745098039216))
-    (is (= (incorrectly-classified (get-test-confusion-matrix-1)) 16.0))
-    (is (= (incorrectly-classified-percent (get-test-confusion-matrix-1)) 0.3137254901960784))))
 #+END_SRC
 
 ** Mean Absolute Error
@@ -235,4 +223,16 @@ Calculate the root mean absolute error of a classification or regression problem
   (testing "Test Kappa statistic (value) function"
     (is (= (stats/kappa (get-test-confusion-matrix-1)) 0.35340729001584775))
     (is (= (stats/kappa (get-test-confusion-matrix-2)) 0.47017943382150845))))
+#+END_SRC
+
+** Classification tests
+
+#+NAME: test classification statistics
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/stats_test.clj
+(deftest test-classification-statistic
+  (testing "Test classification statistics"
+    (is (= (stats/correctly-classified (get-test-confusion-matrix-1)) 35.0))
+    (is (= (stats/correctly-classified-percent (get-test-confusion-matrix-1)) 0.6862745098039216))
+    (is (= (stats/incorrectly-classified (get-test-confusion-matrix-1)) 16.0))
+    (is (= (stats/incorrectly-classified-percent (get-test-confusion-matrix-1)) 0.3137254901960784))))
 #+END_SRC

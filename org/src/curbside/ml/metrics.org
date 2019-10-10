@@ -7,6 +7,7 @@
 - [[#introduction][Introduction]]
 - [[#namespace-definition][Namespace definition]]
 - [[#model-metrics][Model metrics]]
+- [[#metrics-optimization][Metrics Optimization]]
 
 * Introduction
 
@@ -39,6 +40,7 @@ The main metrics involved in =regression= tasks are:
 
 #+BEGIN_SRC clojure
 (ns curbside.ml.metrics
+  (:refer-clojure :exclude [comparator])
   (:require
    [curbside.ml.utils.stats :as stats]
    [curbside.ml.utils.parsing :as parsing])
@@ -81,4 +83,39 @@ The main metrics involved in =regression= tasks are:
 
               :correctly-classified-instances (parsing/nan->nil (stats/correctly-classified confusion-matrix))
               :correctly-classified-instances-percent (parsing/nan->nil (stats/correctly-classified-percent confusion-matrix))}))))
+#+END_SRC
+* Metrics Optimization
+
+Each of the classification or regression algorithm have different metrics that helps us to determine if a model if better than another a given prediction problem.
+
+When come the time to optimize a model, we have to optimize it according to the result of one of those metrics. Some of the metrics are better when they are higher, others are better when they are lower.
+
+What we do here is to define each of those classification and regression metrics and specify how they should be optimized: by keeping the lower and higher results.
+
+#+NAME: metrics optimize max
+#+BEGIN_SRC clojure
+(defn comparator
+  "Returns the comparator to use to compare a metrics' results to optimize its
+  value. Returns `nil` if the metric is unknown."
+  [metric]
+  (get {:tp >
+        :fp <
+        :tn >
+        :fn <
+        :recall >
+        :precision >
+        :fpr <
+        :tpr >
+        :f1 >
+        :roc-auc >
+        :auprc >
+        :kappa >
+        :correlation-coefficient >
+        :error-rate <
+        :root-relative-square-error <
+        :root-mean-square-error <
+        :root-mean-prior-squared-error <
+        :relative-absolute-error <
+        :mean-absolute-error <}
+       metric))
 #+END_SRC
