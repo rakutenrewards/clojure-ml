@@ -224,12 +224,12 @@ Next, we define functions to scale a whole training set. We define functions to 
   "Scales a training set encoded in the file at `input-csv-path`. The scaled set
   is outputted at `outpt-csv-file`, and the scaling factors used to perform
   scaling are saved at `edn-factors-path`."
-  [input-csv-path output-csv-path edn-factors-path feature-scaling-fns label-scaling-fns]
+  [input-csv-path output-csv-file edn-factors-path feature-scaling-fns label-scaling-fns]
   (let [training-set        (conversion/csv-to-maps input-csv-path)
         factors             (scaling-factors feature-scaling-fns label-scaling-fns training-set)
         scaled-set          (scale-training-set feature-scaling-fns label-scaling-fns factors training-set)]
     (spit edn-factors-path (pr-str factors))
-    (conversion/maps-to-csv output-csv-path
+    (conversion/maps-to-csv output-csv-file
                             (conversion/csv-column-keys input-csv-path)
                             scaled-set)))
 #+END_SRC
