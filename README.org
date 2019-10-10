@@ -6,7 +6,6 @@
 - =c4=
 - =random-forest=
 - =m5p=
-- =neural-net=
 - =xgboost=
 
 ** Releasing to Artifactory
