@@ -13,13 +13,13 @@
 
                  ;; SVM
                  [de.bwaldvogel/liblinear "2.30"]
-                 [tw.edu.ntu.csie/libsvm "3.23"]
+                 [tw.edu.ntu.csie/libsvm "3.24"]
 
                  ;; Graphviz
-                 [guru.nidi/graphviz-java "0.10.0"]
+                 [guru.nidi/graphviz-java "0.11.0"]
 
                  ;; xgboost
-                 [ml.dmlc/xgboost4j "0.80"]]
+                 [ml.dmlc/xgboost4j "0.90"]]
 
   :profiles {:uberjar {:aot :all}
              :ci [{:plugins [[test2junit "1.3.3"]]}]}
