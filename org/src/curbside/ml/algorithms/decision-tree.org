@@ -24,7 +24,7 @@ The decision tree models namespace includes all the function that manage the cre
 ** Namespace Definition
 
 #+BEGIN_SRC clojure
-(ns curbside.ml.algorithm.decision-tree
+(ns curbside.ml.algorithms.decision-tree
   (:refer-clojure :exclude [load])
   (:require
    [clojure.java.io :as io]

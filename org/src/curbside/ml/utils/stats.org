@@ -162,6 +162,7 @@ Calculate the root mean absolute error of a classification or regression problem
    [clojure.test :refer [deftest is testing]]
    [curbside.ml.utils.stats :as stats])
   (:import
+   (java.util ArrayList)
    (weka.classifiers.evaluation ConfusionMatrix NominalPrediction)))
 #+END_SRC
 
@@ -181,8 +182,8 @@ Calculate the root mean absolute error of a classification or regression problem
   []
   (let [prediction (fn [actual predicted]
                      (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
-        confusion-matrix (ConfusionMatrix. (into-array java.lang.String ["cat" "dog"]))
-        predictions (java.util.ArrayList.)]
+        confusion-matrix (ConfusionMatrix. (into-array String ["cat" "dog"]))
+        predictions (ArrayList.)]
     (dotimes [n 22]
       (.add predictions (prediction 0.0 0.0)))
     (dotimes [n 7]
@@ -206,8 +207,8 @@ Calculate the root mean absolute error of a classification or regression problem
   []
   (let [prediction (fn [actual predicted]
                      (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
-        confusion-matrix (ConfusionMatrix. (into-array java.lang.String ["cat" "dog"]))
-        predictions (java.util.ArrayList.)]
+        confusion-matrix (ConfusionMatrix. (into-array String ["cat" "dog"]))
+        predictions (ArrayList.)]
     (dotimes [n 60]
       (.add predictions (prediction 0.0 0.0)))
     (dotimes [n 5]
