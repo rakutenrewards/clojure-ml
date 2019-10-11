@@ -30,6 +30,7 @@ The decision tree models namespace includes all the function that manage the cre
    [clojure.java.io :as io]
    [clojure.string :as str]
    [curbside.ml.model :as model]
+   [curbside.ml.training-sets.conversion :as conversion]
    [curbside.ml.utils.weka :as weka])
   (:import
    (guru.nidi.graphviz.parse Parser)
@@ -132,7 +133,7 @@ The decision tree models namespace includes all the function that manage the cre
                :m5p (M5P.)
                :random-forest (RandomForest.))]
     (.setOptions tree (parameters params))
-    (.buildClassifier tree (weka/problem prob))
+    (.buildClassifier tree (conversion/csv-to-arff prob))
     tree))
 
 (defmethod model/train :c4.5
