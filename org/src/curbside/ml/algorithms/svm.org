@@ -164,7 +164,7 @@ Once the model is scaled we can train a model that will be used to make predicti
     (svm/svm_train problem-obj params-obj)))
 
 (defmethod model/train :svm
-  [_ prob params]
+  [_ _predictor-type prob params]
   (train prob params))
 #+END_SRC
 
@@ -225,6 +225,6 @@ Once the model is created and in-memory, we have to be able to save it on the fi
                               into-array)))
 
 (defmethod model/predict :svm
-  [_ model seleted-features hyperparameters feature-vector]
+  [_ _predictor-type model seleted-features hyperparameters feature-vector]
   (predict model seleted-features hyperparameters feature-vector))
 #+END_SRC

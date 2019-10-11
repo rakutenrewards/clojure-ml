@@ -84,6 +84,7 @@ The main metrics involved in =regression= tasks are:
               :correctly-classified-instances (parsing/nan->nil (stats/correctly-classified confusion-matrix))
               :correctly-classified-instances-percent (parsing/nan->nil (stats/correctly-classified-percent confusion-matrix))}))))
 #+END_SRC
+
 * Metrics Optimization
 
 Each of the classification or regression algorithm have different metrics that helps us to determine if a model if better than another a given prediction problem.

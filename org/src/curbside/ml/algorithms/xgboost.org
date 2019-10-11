@@ -93,7 +93,7 @@ For the parameters to XGBoost
    (:eval-fn params)))
 
 (defmethod model/train :xgboost
-  [_ training-set-path params]
+  [_ _predictor-type training-set-path params]
   (train training-set-path params))
 #+END_SRC
 
@@ -162,7 +162,7 @@ arrays when it creates them.
      (ffirst))))
 
 (defmethod model/predict :xgboost
-  [_ model seleted-features hyperparameters feature-vector]
+  [_ _predictor-type model seleted-features hyperparameters feature-vector]
   (predict model seleted-features hyperparameters feature-vector))
 #+END_SRC
 
