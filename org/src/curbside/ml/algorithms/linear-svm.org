@@ -24,8 +24,9 @@ The linear SVM classifier is geared to handle large-scale linear classification 
   (:require
    [clojure.java.io :as io]
    [curbside.ml.model :as model]
-   [curbside.ml.utils.parsing :as parsing])
+   [curbside.ml.training-sets.conversion :as conversion])
   (:import
+   (java.io File)
    (de.bwaldvogel.liblinear Linear SolverType Problem Parameter Model FeatureNode)))
 #+END_SRC
 
@@ -49,30 +50,23 @@ The two keys are the classes' labels. Then the weight modifier for each of these
 
 #+NAME: linear svm training
 #+BEGIN_SRC clojure
+(defn- to-temp-svm-file
+  [training-set-csv-path]
+  (let [file (doto (File/createTempFile "data_" ".csv")
+               (.deleteOnExit))
+        temp-svm-path (.getPath file)]
+    (conversion/csv-to-libsvm training-set-csv-path temp-svm-path)
+    file))
+
 (defn- problem
   "Define a problem space by reading a SVM training set. If training is a SVM
   file then the problem will be read from that file. If training is a sequence
   that define the problem, then the problem will be created from that sequence."
-  [training]
-  (if (and (string? training) (.exists (io/as-file training)))
-    (Problem/readFromFile (io/as-file training) 0.0)
-    (when (seq? training)
-      (let [problem (new Problem)
-            dimensions (count (rest (first training)))]
-        (set! (.n problem) dimensions)
-        (set! (.l problem) (count training))
-        (set! (.y problem) (double-array (->> training
-                                              (mapv (fn [[label & _features]]
-                                                      (parsing/parse-double label))))))
-        (set! (.x problem) (into-array (->> training
-                                            (map (fn [[_label & features]]
-                                                   (into-array
-                                                    (sort-by #(.index ^FeatureNode %)
-                                                             (->> features
-                                                                  (keep-indexed (fn [index feature]
-                                                                                 (when-let [feature (parsing/parse-double feature)]
-                                                                                   (FeatureNode. (inc index) (parsing/parse-double feature)))))))))))))
-        problem))))
+  [training-set-csv-path]
+  (-> training-set-csv-path
+      (to-temp-svm-file)
+      (io/file)
+      (#(Problem/readFromFile % 0.0))))
 
 (def default-params {:algorithm :l2l2
                      :c 1
@@ -104,8 +98,8 @@ The two keys are the classes' labels. Then the weight modifier for each of these
     parameters))
 
 (defmethod model/train :lsvm
-  [_ prob params]
-  (Linear/train (problem prob) (parameters params)))
+  [_ _predictor-type trainin-set-csv-path params]
+  (Linear/train (problem trainin-set-csv-path) (parameters params)))
 #+END_SRC
 
 * Save
@@ -149,7 +143,7 @@ The two keys are the classes' labels. Then the weight modifier for each of these
     (new FeatureNode (inc index) value)))
 
 (defmethod model/predict :lsvm
-  [_ model _selected-features _hyperparameters feature-vector]
+  [_ _predictor-type model _selected-features _hyperparameters feature-vector]
   (Linear/predict model (->> feature-vector
                              (keep-indexed create-feature-node)
                              into-array)))

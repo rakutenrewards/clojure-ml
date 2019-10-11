@@ -127,26 +127,26 @@ The decision tree models namespace includes all the function that manage the cre
 
 (defn- train
   "Train a Decision Tree model for a given problem with specified parameters"
-  [algorithm prob params]
+  [algorithm predictor-type prob params]
   (let [tree (case algorithm
                :c4.5 (J48.)
                :m5p (M5P.)
                :random-forest (RandomForest.))]
     (.setOptions tree (parameters params))
-    (.buildClassifier tree (conversion/csv-to-arff prob))
+    (.buildClassifier tree (conversion/csv-to-arff prob predictor-type))
     tree))
 
 (defmethod model/train :c4.5
-  [algorithm prob params]
-  (train algorithm prob params))
+  [algorithm predictor-type prob params]
+  (train algorithm predictor-type prob params))
 
 (defmethod model/train :m5p
-  [algorithm prob params]
-  (train algorithm prob params))
+  [algorithm predictor-type prob params]
+  (train algorithm predictor-type prob params))
 
 (defmethod model/train :random-forest
-  [algorithm prob params]
-  (train algorithm prob params))
+  [algorithm predictor-type prob params]
+  (train algorithm predictor-type prob params))
 #+END_SRC
 
 * Save Models
@@ -243,23 +243,19 @@ When we want to classify/predict a new instance, we have to use the =create-inst
 #+NAME: create instance
 #+BEGIN_SRC clojure
 (defn predict
-  "Predict the class/label of an `instance` given `model`. `instance` is an Instance
-  of feature values. If the training set has been scaled before training, then
-  `features` should be scaled with the same feature scaling function before
-  being used to predict a class/label. The predicted class label is returned."
-  [^AbstractClassifier model selected-features feature-vector]
-  (let [instance (weka/create-instance selected-features feature-vector)]
+  [predictor-type ^AbstractClassifier model selected-features feature-vector]
+  (let [instance (weka/create-instance predictor-type selected-features feature-vector)]
     (.classifyInstance model instance)))
 
 (defmethod model/predict :c4.5
-  [_ model selected-features _hyperparameters feature-vector]
-  (predict model selected-features feature-vector))
+  [_ predictor-type model selected-features _hyperparameters feature-vector]
+  (predict predictor-type model selected-features feature-vector))
 
 (defmethod model/predict :m5p
-  [_ model selected-features _hyperparameters feature-vector]
-  (predict model selected-features feature-vector))
+  [_ predictor-type model selected-features _hyperparameters feature-vector]
+  (predict predictor-type model selected-features feature-vector))
 
 (defmethod model/predict :random-forest
-  [_ model selected-features _hyperparameters feature-vector]
-  (predict model selected-features feature-vector))
+  [_ predictor-type model selected-features _hyperparameters feature-vector]
+  (predict predictor-type model selected-features feature-vector))
 #+END_SRC
