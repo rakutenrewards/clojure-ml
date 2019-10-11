@@ -84,10 +84,13 @@ Once the model is scaled we can train a model that will be used to make predicti
                       (with-open [in-file (io/reader training)]
                         (doall
                           (csv/read-csv in-file))))
+
                      (string? training)
                      (throw (Exception. (str "File doesn't exist: " training)))
+
                      (sequential? training)
                      training
+
                      :else
                      (throw (Exception. "unknown type for training input")))
           problem (new svm_problem)]
