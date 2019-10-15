@@ -126,27 +126,27 @@ Once the model is scaled we can train a model that will be used to make predicti
    :nu-svr svm_parameter/NU_SVR
    :one-class svm_parameter/ONE_CLASS})
 
-(def default-params {:kernel-type (:rbf kernel-types)
-                     :svm-type (:c-svc svm-types)
-                     :C 1               ; for c-svc, epsilon-svr and nu-svr
-                     :cache-size 100    ; in MB
-                     :coef0 0           ; for poly and sigmoid
-                     :degree 3          ; for poly
-                     :eps 1e-3          ; stopping criteria
-                     :gamma 0           ; for poly, rbf and sigmoid
-                     :nr-weight 0       ; for c-svc
-                     :nu 0.5            ; for nu-svc, one-class and nu-svr
-                     :p 0.1             ; for epsilon-svr
-                     :probability 0     ; do probability estimates
-                     :shrinking 1       ; use the shrinking heuristic
-                     :weight (double-array 0) ; for c-svc
-                     :weight-label (int-array 0) ; for c-svc
-                     })
+(def default-hyperparameters {:kernel-type (:rbf kernel-types)
+                              :svm-type (:c-svc svm-types)
+                              :C 1               ; for c-svc, epsilon-svr and nu-svr
+                              :cache-size 100    ; in MB
+                              :coef0 0           ; for poly and sigmoid
+                              :degree 3          ; for poly
+                              :eps 1e-3          ; stopping criteria
+                              :gamma 0           ; for poly, rbf and sigmoid
+                              :nr-weight 0       ; for c-svc
+                              :nu 0.5            ; for nu-svc, one-class and nu-svr
+                              :p 0.1             ; for epsilon-svr
+                              :probability 0     ; do probability estimates
+                              :shrinking 1       ; use the shrinking heuristic
+                              :weight (double-array 0) ; for c-svc
+                              :weight-label (int-array 0) ; for c-svc
+                              })
 
-(defn- parameters
-  "Define all the parameters required by a SVM trainer"
-  [params]
-  (let [params (merge default-params params)
+(defn- format-hyperparameters
+  "Define all the hyperparameters required by a SVM trainer"
+  [hyperparameters]
+  (let [params (merge default-hyperparameters hyperparameters)
         parameters (new svm_parameter)]
     (doseq [[param v] params]
       ;; let form here prevents linter from complaining about unused return val
@@ -156,16 +156,16 @@ Once the model is scaled we can train a model that will be used to make predicti
 
 (defn- train
   "Train a Linear SVM model for a given problem with specified parameters"
-  [prob params]
-  (let [problem-obj (problem prob)
-        params-obj (parameters params)]
+  [training-set-path hyperparameters]
+  (let [problem-obj (problem training-set-path)
+        params-obj (format-hyperparameters hyperparameters)]
     (when-let [error (svm/svm_check_parameter problem-obj params-obj)]
       (throw (Exception. error)))
     (svm/svm_train problem-obj params-obj)))
 
 (defmethod model/train :svm
-  [_ _predictor-type prob params]
-  (train prob params))
+  [_ _predictor-type training-set-path params]
+  (train training-set-path params))
 #+END_SRC
 
 * Save

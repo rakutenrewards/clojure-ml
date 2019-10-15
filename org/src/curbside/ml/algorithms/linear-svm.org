@@ -59,29 +59,28 @@ The two keys are the classes' labels. Then the weight modifier for each of these
     file))
 
 (defn- problem
-  "Define a problem space by reading a SVM training set. If training is a SVM
-  file then the problem will be read from that file. If training is a sequence
-  that define the problem, then the problem will be created from that sequence."
+  "Define a problem space by reading a CSV training set."
   [training-set-csv-path]
   (-> training-set-csv-path
       (to-temp-svm-file)
       (io/file)
       (#(Problem/readFromFile % 0.0))))
 
-(def default-params {:algorithm :l2l2
-                     :c 1
-                     :eps 0.01
-                     :max-iterations 256
-                     :p 0.1
-                     :weights nil})
+(def default-hyperparameters {:algorithm :l2l2
+                              :c 1
+                              :eps 0.01
+                              :max-iterations 256
+                              :p 0.1
+                              :weights nil})
 
 (defn- parameters
   "Define all the parameters required by a Linear SVM trainer. The `weight`
   parameter define the weight modifier to apply to each class. It is a map of
   where the keys are the classes labels and where the value is the weight
   modifier to apply to the `c` parameter"
-  [params]
-  (let [{:keys [algorithm c eps max-iterations p weights]} (merge default-params params)
+  [hyperparameters]
+  (let [{:keys [algorithm c eps max-iterations p weights]} (merge default-hyperparameters
+                                                                  hyperparameters)
         parameters (new Parameter (case algorithm
                                     :l2lr_primal SolverType/L2R_LR
                                     :l2l2 SolverType/L2R_L2LOSS_SVC_DUAL
@@ -98,8 +97,8 @@ The two keys are the classes' labels. Then the weight modifier for each of these
     parameters))
 
 (defmethod model/train :lsvm
-  [_ _predictor-type trainin-set-csv-path params]
-  (Linear/train (problem trainin-set-csv-path) (parameters params)))
+  [_ _predictor-type trainin-set-csv-path hyperparameters]
+  (Linear/train (problem trainin-set-csv-path) (parameters hyperparameters)))
 #+END_SRC
 
 * Save
