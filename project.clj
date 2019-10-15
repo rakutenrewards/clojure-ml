@@ -1,4 +1,4 @@
-(defproject com.curbside/curbside-clojure-ml "0.1.0"
+(defproject com.curbside/curbside-clojure-ml "0.2.0-SNAPSHOT"
   :description "Library for ML model training and serving."
   :url "http://github.com/Curbside/curbside-clojure-ml"
   :dependencies [[org.clojure/clojure "1.10.1"]
