@@ -1,0 +1,144 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/models/linear_svm.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: Linear SVM Models
+
+* Table of Contents                                             :toc:noexport:
+- [[#introduction][Introduction]]
+  - [[#namespace-definition][Namespace Definition]]
+- [[#model-creation][Model Creation]]
+  - [[#create-model][Create Model]]
+- [[#save][Save]]
+- [[#load][Load]]
+- [[#predict][Predict]]
+
+* Introduction
+
+The linear SVM classifier is geared to handle large-scale linear classification with sparse features matrix. It supports logistic regression and linear support vector machines. The linear SVM classifier uses the [[https://www.csie.ntu.edu.tw/~cjlin/liblinear/][LIBLINEAR]] library.
+
+** Namespace Definition
+
+#+BEGIN_SRC clojure
+(ns curbside.ml.models.linear-svm
+  (:refer-clojure :exclude [load])
+  (:require
+   [clojure.java.io :as io]
+   [curbside.ml.training-sets.conversion :as conversion])
+  (:import
+   (java.io File)
+   (de.bwaldvogel.liblinear Linear SolverType Problem Parameter Model FeatureNode)))
+#+END_SRC
+
+* Model Creation
+** Create Model
+
+One important parameter of linear svm models is the =weights= that should be leveraged if the training set is unbalanced. An unbalanced training set is one where there are many more of one class than another one. In these cases, we have to weight the class that is unbalanced to rebalance the training set accordingly. This is useful for training classifier using unbalanced input data or with asymmetric misclassification cost.
+
+The =weights= parameter is a map where the keys are the labels of the classifier and where the value is the weight modifier to apply to the =c= parameter. In a binary classifier, the map would looks like:
+
+#+BEGIN_SRC clojure :tangle no
+
+{
+  0 1.0
+  1 3.0
+}
+
+#+END_SRC
+
+The two keys are the classes' labels. Then the weight modifier for each of these classes. A modifier of =1= means that nothing get modified. If a label is missing in the map, then =1= is used by default. In this example, the class =0= is unaffected and the class =1= is affected by \(C * 3.0\)
+
+#+NAME: linear svm training
+#+BEGIN_SRC clojure
+(defn- to-temp-svm-file
+  [training-set-csv-path]
+  (let [file (doto (File/createTempFile "data_" ".csv")
+               (.deleteOnExit))
+        temp-svm-path (.getPath file)]
+    (conversion/csv-to-libsvm training-set-csv-path temp-svm-path)
+    file))
+
+(defn- problem
+  "Define a problem space by reading a CSV training set."
+  [training-set-csv-path]
+  (-> training-set-csv-path
+      (to-temp-svm-file)
+      (io/file)
+      (#(Problem/readFromFile % 0.0))))
+
+(def default-hyperparameters {:algorithm :l2l2
+                              :c 1
+                              :eps 0.01
+                              :max-iterations 256
+                              :p 0.1
+                              :weights nil})
+
+(defn- parameters
+  "Define all the parameters required by a Linear SVM trainer. The `weight`
+  parameter define the weight modifier to apply to each class. It is a map of
+  where the keys are the classes labels and where the value is the weight
+  modifier to apply to the `c` parameter"
+  [hyperparameters]
+  (let [{:keys [algorithm c eps max-iterations p weights]} (merge default-hyperparameters
+                                                                  hyperparameters)
+        parameters (new Parameter (case algorithm
+                                    :l2lr_primal SolverType/L2R_LR
+                                    :l2l2 SolverType/L2R_L2LOSS_SVC_DUAL
+                                    :l2l2_primal SolverType/L2R_L2LOSS_SVC
+                                    :l2l1 SolverType/L2R_L1LOSS_SVC_DUAL
+                                    :multi SolverType/MCSVM_CS
+                                    :l1l2_primal SolverType/L1R_L2LOSS_SVC
+                                    :l1lr SolverType/L1R_LR
+                                    :l2lr SolverType/L2R_LR) c eps max-iterations p)]
+    (when-not (nil? weights)
+      (.setWeights parameters
+                   (double-array (vals weights))
+                   (into-array Integer/TYPE (keys weights))))
+    parameters))
+
+(defn train
+  [training-set-csv-path hyperparameters]
+  (Linear/train (problem training-set-csv-path) (parameters hyperparameters)))
+#+END_SRC
+
+* Save
+
+#+NAME: save model
+#+BEGIN_SRC clojure
+(defn save
+  [model filepath]
+  (with-open [out-file (io/writer filepath)]
+    (Linear/saveModel out-file ^Model model)
+    [filepath]))
+#+END_SRC
+
+* Load
+
+#+NAME: load model
+#+BEGIN_SRC clojure
+(defn load
+  [filepath-or-bytes]
+  (with-open [reader (io/reader filepath-or-bytes)]
+    (Linear/loadModel reader)))
+#+END_SRC
+
+* Predict
+
+#+NAME: predict
+#+BEGIN_SRC clojure
+(defn- create-feature-node
+  "Create a FeatureNode at `index` with `value`. If `value` is empty then it
+  returns nil otherwise it returns the FeatureNode"
+  [index value]
+  (when-let [value (if (string? value)
+                       (when-not (empty? value)
+                         (Double/parseDouble value))
+                       value)]
+    (new FeatureNode (inc index) value)))
+
+(defn predict
+  [model feature-vector]
+  (Linear/predict model
+                  (->> feature-vector
+                       (keep-indexed create-feature-node)
+                       into-array)))
+#+END_SRC

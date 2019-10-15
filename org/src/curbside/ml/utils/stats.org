@@ -1,0 +1,239 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/utils/stats.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: Stats
+
+* Table of Contents                                            :toc:noexport:
+- [[#namespace-definition][Namespace definition]]
+- [[#kappa-statistic][Kappa statistic]]
+  - [[#interpreting-kappa-values][Interpreting kappa values]]
+  - [[#classification-statistics][Classification statistics]]
+  - [[#mean-absolute-error][Mean Absolute Error]]
+  - [[#root-mean-square-error][Root Mean Square Error]]
+- [[#tests][Tests]]
+  - [[#namespaces-definition][Namespaces definition]]
+  - [[#kappa-tests][Kappa tests]]
+  - [[#classification-tests][Classification tests]]
+
+* Namespace definition
+#+BEGIN_SRC clojure
+(ns curbside.ml.utils.stats
+  (:import
+   (weka.classifiers.evaluation ConfusionMatrix)))
+#+END_SRC
+
+* Kappa statistic
+
+The Kappa statistic is a metric that compares an =observed accuracy= with an =expected accuracy= (random chance). When two binary variables are attempts by two individuals to measure the same thing, you can use Cohen's Kappa as a measure of agreement between the two individuals.
+
+In the context of measuring performance of prediction models, what we try to measure is the agreement between the predictions performed by the model and the ground truth (the labeled training set).
+
+#+BEGIN_QUOTE
+Assume that a model was built using supervised machine learning on labeled data. This doesn't always have to be the case; the kappa statistic is often used as a measure of reliability between two human raters. Regardless, columns correspond to one "rater" while rows correspond to another "rater". In supervised machine learning, one "rater" reflects ground truth (the actual values of each instance to be classified), obtained from labeled data, and the other "rater" is the machine learning classifier used to perform the classification. Ultimately it doesn't matter which is which to compute the kappa statistic, but for clarity's sake lets say that the columns reflect ground truth and the rows reflect the machine learning classifier classifications.
+
+From the confusion matrix we can see there are 30 instances total (10 + 7 + 5 + 8 = 30). According to the first column 15 were labeled as Cats (10 + 5 = 15), and according to the second column 15 were labeled as Dogs (7 + 8 = 15). We can also see that the model classified 17 instances as Cats (10 + 7 = 17) and 13 instances as Dogs (5 + 8 = 13).
+
+Observed Accuracy is simply the number of instances that were classified correctly throughout the entire confusion matrix, i.e. the number of instances that were labeled as Cats via ground truth and then classified as Cats by the machine learning classifier, or labeled as Dogs via ground truth and then classified as Dogs by the machine learning classifier. To calculate Observed Accuracy, we simply add the number of instances that the machine learning classifier agreed with the ground truth label, and divide by the total number of instances. For this confusion matrix, this would be 0.6 ((10 + 8) / 30 = 0.6).
+
+Before we get to the equation for the kappa statistic, one more value is needed: the Expected Accuracy. This value is defined as the accuracy that any random classifier would be expected to achieve based on the confusion matrix. The Expected Accuracy is directly related to the number of instances of each class (Cats and Dogs), along with the number of instances that the machine learning classifier agreed with the ground truth label. To calculate Expected Accuracy for our confusion matrix, first multiply the marginal frequency of Cats for one "rater" by the marginal frequency of Cats for the second "rater", and divide by the total number of instances. The marginal frequency for a certain class by a certain "rater" is just the sum of all instances the "rater" indicated were that class. In our case, 15 (10 + 5 = 15) instances were labeled as Cats according to ground truth, and 17 (10 + 7 = 17) instances were classified as Cats by the machine learning classifier. This results in a value of 8.5 (15 * 17 / 30 = 8.5). This is then done for the second class as well (and can be repeated for each additional class if there are more than 2). 15 (7 + 8 = 15) instances were labeled as Dogs according to ground truth, and 13 (8 + 5 = 13) instances were classified as Dogs by the machine learning classifier. This results in a value of 6.5 (15 * 13 / 30 = 6.5). The final step is to add all these values together, and finally divide again by the total number of instances, resulting in an Expected Accuracy of 0.5 ((8.5 + 6.5) / 30 = 0.5). In our example, the Expected Accuracy turned out to be 50%, as will always be the case when either "rater" classifies each class with the same frequency in a binary classification (both Cats and Dogs contained 15 instances according to ground truth labels in our confusion matrix).
+
+The kappa statistic can then be calculated using both the Observed Accuracy (0.60) and the Expected Accuracy (0.50) and the formula:
+
+Kappa = (observed accuracy - expected accuracy)/(1 - expected accuracy)
+
+So, in our case, the kappa statistic equals: (0.60 - 0.50)/(1 - 0.50) = 0.20.
+#+END_QUOTE
+
+[[https://stats.stackexchange.com/a/82187][Source]]
+
+We implement the Kappa statistic by getting the number of predictions and the number of correct predictions from a confusion matrix object. Then we calculate the observed accuracy from those two values. The calculation of the expected accuracy is a bit more complex. What we do is to multiply the first column with the first row, then the second column with the second row, etc. We do this for the size of the matrix. Finally we calculate the Kappa statistic using the calculated observed and expected accuracy.
+
+#+NAME: kappa statistic
+#+BEGIN_SRC clojure
+(defn- sum-column
+  "Sum the values of a column. `col-num` index starts at 0."
+  [col-num matrix]
+  (reduce (fn [a b]
+            (if (vector? a)
+              (+ (nth a col-num) (nth b col-num))
+              (+ a (nth b col-num)))) matrix))
+
+(defn- sum-row
+  "Sum the values of a row. `row-num` index starts at 0."
+  [row-num matrix]
+  (reduce + (nth matrix row-num)))
+
+(defn kappa
+  "Calculate the Kappa statistic (value) from a `ConfusionMatrix`"
+  [^ConfusionMatrix confusion-matrix]
+  (let [matrix (mapv vec (.getArray confusion-matrix))
+        nb-predictions (.total confusion-matrix)
+        correct-predictions (.correct confusion-matrix)
+        observed-accuracy (/ correct-predictions nb-predictions)
+        expected-accuracy (loop [n 0
+                                 sums 0]
+                            (if (= n (.size confusion-matrix))
+                              (/ sums nb-predictions)
+                              (recur (inc n)
+                                     (+ sums (/ (* (sum-column n matrix)
+                                                   (sum-row n matrix)) nb-predictions)))))]
+    (/ (- observed-accuracy expected-accuracy) (- 1 expected-accuracy))))
+#+END_SRC
+
+** Interpreting kappa values
+
+What is a good Kappa value?
+
+#+BEGIN_QUOTE
+There is not a standardized interpretation of the kappa statistic. According to Wikipedia (citing their paper), Landis and Koch considers 0-0.20 as slight, 0.21-0.40 as fair, 0.41-0.60 as moderate, 0.61-0.80 as substantial, and 0.81-1 as almost perfect. Fleiss considers kappas > 0.75 as excellent, 0.40-0.75 as fair to good, and < 0.40 as poor. It is important to note that both scales are somewhat arbitrary. At least two further considerations should be taken into account when interpreting the kappa statistic. First, the kappa statistic should always be compared with an accompanied confusion matrix if possible to obtain the most accurate interpretation. Consider the following confusion matrix:
+
+     Cats Dogs
+Cats| 60 | 125 |
+Dogs| 5  | 5000|
+
+The kappa statistic is 0.47, well above the threshold for moderate according to Landis and Koch and fair-good for Fleiss. However, notice the hit rate for classifying Cats. Less than a third of all Cats were actually classified as Cats; the rest were all classified as Dogs. If we care more about classifying Cats correctly (say, we are allergic to Cats but not to Dogs, and all we care about is not succumbing to allergies as opposed to maximizing the number of animals we take in), then a classifier with a lower kappa but better rate of classifying Cats might be more ideal.
+
+Second, acceptable kappa statistic values vary on the context. For instance, in many inter-rater reliability studies with easily observable behaviors, kappa statistic values below 0.70 might be considered low. However, in studies using machine learning to explore unobservable phenomena like cognitive states such as day dreaming, kappa statistic values above 0.40 might be considered exceptional.
+
+So, in answer to your question about a 0.40 kappa, it depends. If nothing else, it means that the classifier achieved a rate of classification 2/5 of the way between whatever the expected accuracy was and 100% accuracy. If expected accuracy was 80%, that means that the classifier performed 40% (because kappa is 0.4) of 20% (because this is the distance between 80% and 100%) above 80% (because this is a kappa of 0, or random chance), or 88%. So, in that case, each increase in kappa of 0.10 indicates a 2% increase in classification accuracy. If accuracy was instead 50%, a kappa of 0.4 would mean that the classifier performed with an accuracy that is 40% (kappa of 0.4) of 50% (distance between 50% and 100%) greater than 50% (because this is a kappa of 0, or random chance), or 70%. Again, in this case that means that an increase in kappa of 0.1 indicates a 5% increase in classification accuracy.
+
+Classifiers built and evaluated on data sets of different class distributions can be compared more reliably through the kappa statistic (as opposed to merely using accuracy) because of this scaling in relation to expected accuracy. It gives a better indicator of how the classifier performed across all instances, because a simple accuracy can be skewed if the class distribution is similarly skewed. As mentioned earlier, an accuracy of 80% is a lot more impressive with an expected accuracy of 50% versus an expected accuracy of 75%. Expected accuracy as detailed above is susceptible to skewed class distributions, so by controlling for the expected accuracy through the kappa statistic, we allow models of different class distributions to be more easily compared.
+#+END_QUOTE
+
+To that we have to add that a Kappa value can be smaller than zero. This is a sign that the two observers agreed less than would be expected just by chance.
+
+** Classification statistics
+
+Some basic statistics that we want to compute are the number (and the percentage) of predictions that were correctly and incorrectly classifying an instance.
+
+#+NAME: classification statistics
+#+BEGIN_SRC clojure
+(defn correctly-classified
+  [confusion-matrix]
+  (.correct confusion-matrix))
+
+(defn correctly-classified-percent
+  [confusion-matrix]
+  (/ (correctly-classified confusion-matrix) (.total confusion-matrix)))
+
+(defn incorrectly-classified
+  [confusion-matrix]
+  (.incorrect confusion-matrix))
+
+(defn incorrectly-classified-percent
+  [confusion-matrix]
+  (/ (incorrectly-classified confusion-matrix) (.total confusion-matrix)))
+#+END_SRC
+
+** Mean Absolute Error
+
+Calculate the mean absolute error of a classification or regression problem.
+
+#+NAME: mean absolute error
+#+BEGIN_SRC clojure
+(defn mean-absolute-error
+  "Calculate the mean absolute error of a classification or regression task. `n`
+  is the number of predictions. `sum-absolute-error` is the number of the
+  absolute error between the observed and actual prediction"
+  [n sum-absolute-error]
+  (/ sum-absolute-error n))
+#+END_SRC
+
+** Root Mean Square Error
+
+Calculate the root mean absolute error of a classification or regression problem.
+
+#+NAME: root mean square error
+#+BEGIN_SRC clojure
+(defn root-mean-square-error
+  "Calculate the root mean square error of a classification or regression task.
+  `n` is the number of predictions. `sum-square-error` is the number of the
+  absolute error between the observed and actual prediction"
+  [n sum-square-error]
+  (Math/sqrt (/ sum-square-error n)))
+#+END_SRC
+
+* Tests
+** Namespaces definition
+
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/stats_test.clj
+(ns curbside.ml.utils.stats-test
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [curbside.ml.utils.stats :as stats])
+  (:import
+   (java.util ArrayList)
+   (weka.classifiers.evaluation ConfusionMatrix NominalPrediction)))
+#+END_SRC
+
+** Kappa tests
+
+#+NAME: kappa statistic tests
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/stats_test.clj
+(defn- get-test-confusion-matrix-1
+  "Create a confusion matrix composed of multiple predictions for testing
+  purposes. The confusion matrix includes 22 cats (0.0) that were categorized as cat,
+  7 cats that were categorized as dogs (1.0), 9 dogs categorized as cats and 13
+  dogs categorized as dogs.
+
+    a    b     actual class
+   22    9 |   a = cat
+    7   13 |   b = dog"
+  []
+  (let [prediction (fn [actual predicted]
+                     (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
+        confusion-matrix (ConfusionMatrix. (into-array String ["cat" "dog"]))
+        predictions (ArrayList.)]
+    (dotimes [n 22]
+      (.add predictions (prediction 0.0 0.0)))
+    (dotimes [n 7]
+      (.add predictions (prediction 0.0 1.0)))
+    (dotimes [n 9]
+      (.add predictions (prediction 1.0 0.0)))
+    (dotimes [n 13]
+      (.add predictions (prediction 1.0 1.0)))
+    (.addPredictions confusion-matrix predictions)
+    confusion-matrix))
+
+(defn- get-test-confusion-matrix-2
+  "Create a confusion matrix composed of multiple predictions for testing
+  purposes. The confusion matrix includes 60 cats (0.0) that were categorized as cat,
+  5 cats that were categorized as dogs (1.0), 125 dogs categorized as cats and 5000
+  dogs categorized as dogs.
+
+    a    b     actual class
+   60  125 |   a = cat
+    5 5000 |   b = dog"
+  []
+  (let [prediction (fn [actual predicted]
+                     (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
+        confusion-matrix (ConfusionMatrix. (into-array String ["cat" "dog"]))
+        predictions (ArrayList.)]
+    (dotimes [n 60]
+      (.add predictions (prediction 0.0 0.0)))
+    (dotimes [n 5]
+      (.add predictions (prediction 0.0 1.0)))
+    (dotimes [n 125]
+      (.add predictions (prediction 1.0 0.0)))
+    (dotimes [n 5000]
+      (.add predictions (prediction 1.0 1.0)))
+    (.addPredictions confusion-matrix predictions)
+    confusion-matrix))
+
+(deftest test-kappa-statistic
+  (testing "Test Kappa statistic (value) function"
+    (is (= (stats/kappa (get-test-confusion-matrix-1)) 0.35340729001584775))
+    (is (= (stats/kappa (get-test-confusion-matrix-2)) 0.47017943382150845))))
+#+END_SRC
+
+** Classification tests
+
+#+NAME: test classification statistics
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/stats_test.clj
+(deftest test-classification-statistic
+  (testing "Test classification statistics"
+    (is (= (stats/correctly-classified (get-test-confusion-matrix-1)) 35.0))
+    (is (= (stats/correctly-classified-percent (get-test-confusion-matrix-1)) 0.6862745098039216))
+    (is (= (stats/incorrectly-classified (get-test-confusion-matrix-1)) 16.0))
+    (is (= (stats/incorrectly-classified-percent (get-test-confusion-matrix-1)) 0.3137254901960784))))
+#+END_SRC

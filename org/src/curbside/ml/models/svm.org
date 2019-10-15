@@ -1,0 +1,213 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/models/svm.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: SVM
+
+* Table of Contents                                             :toc:noexport:
+- [[#introduction][Introduction]]
+  - [[#namespace-definition][Namespace Definition]]
+- [[#train][Train]]
+- [[#save][Save]]
+- [[#load][Load]]
+- [[#predict][Predict]]
+
+* Introduction
+
+The SVM supports logistic regression and linear support vector machines. The linear SVM classifier uses the [[https://www.csie.ntu.edu.tw/~cjlin/libsvm/][LIBSVM]] library.
+
+** Namespace Definition
+
+#+BEGIN_SRC clojure
+(ns curbside.ml.models.svm
+  (:refer-clojure :exclude [load])
+  (:require
+   [clojure.data.csv :as csv]
+   [clojure.java.io :as io]
+   [clojure.string :as str]
+   [curbside.ml.utils.parsing :as parsing])
+  (:import
+   (clojure.lang Reflector)
+   (libsvm svm_problem svm_node svm_parameter svm)))
+#+END_SRC
+
+* Train
+
+Once the model is scaled we can train a model that will be used to make predictions. The main concepts related to train a model are:
+
+  1. =problem=: is the labeled data used by the system to train a model given an learning algorithm. This is the input training set.
+  2. =parameters=: are the hyper-parameters of a learning algorithm
+  3. =train=: is the name of the function that get a =problem= and a set of =parameters= as input to output a trained =model=.
+
+#+NAME: svm training
+#+BEGIN_SRC clojure :results silent
+(defn load-svm
+  "Parses a .svm file into an svm_problem."
+  [training]
+  (with-open [in-file (io/reader training)]
+    (let [labels-features
+          (mapv
+           (fn [l]
+             (let [space-split (str/split l #" ")
+                   label (parsing/parse-double (first space-split))
+                   features (->> (rest space-split)
+                                 (map #(str/split % #":"))
+                                 (map (fn [[i v]]
+                                        (let [node (new svm_node)]
+                                          (set! (. node index)
+                                            (Integer/parseInt i))
+                                          (set! (. node value)
+                                            (parsing/parse-double v))
+                                          node)))
+                                 into-array)]
+               [label features]))
+           (line-seq in-file))]
+      [(double-array (map first labels-features))
+       (into-array (map second labels-features))])))
+
+(defn- problem
+  "Define a problem space by reading a CSV training set. If training is a CSV
+  file then the problem will be read from that file. If training is a sequence
+  that define the problem, then the problem will be created from that sequence."
+  [training]
+  (if (and (string? training) (.exists (io/as-file training))
+           (str/ends-with? training ".svm"))
+    (let [[labels features] (load-svm training)
+          problem (new svm_problem)]
+      (set! (.l problem) (count labels))
+      (set! (.y problem) labels)
+      (set! (.x problem) features)
+      problem)
+    (let [training (cond
+                     (and (string? training) (.exists (io/as-file training)))
+                     (rest
+                      (with-open [in-file (io/reader training)]
+                        (doall
+                          (csv/read-csv in-file))))
+
+                     (string? training)
+                     (throw (Exception. (str "File doesn't exist: " training)))
+
+                     (sequential? training)
+                     training
+
+                     :else
+                     (throw (Exception. "unknown type for training input")))
+          problem (new svm_problem)]
+      (set! (.l problem) (count training))
+      (set! (.y problem) (double-array (->> training
+                                            (mapv (fn [[label & _features]]
+                                                    (parsing/parse-double label))))))
+      (set! (.x problem) (into-array
+                          (->> training
+                               (map (fn [[_label & features]]
+                                      (into-array
+                                       (sort-by #(.index %)
+                                                (->> features
+                                                     (keep-indexed (fn [index feature]
+                                                                     (when-let [feature (parsing/parse-double feature)]
+                                                                       (let [node (new svm_node)]
+                                                                         (set! (. node index) (inc index))
+                                                                         (set! (. node value) feature)
+                                                                         node))))))))))))
+      problem)))
+
+(def kernel-types
+  {:linear svm_parameter/LINEAR
+   :poly svm_parameter/POLY
+   :pre-computed svm_parameter/PRECOMPUTED
+   :rbf svm_parameter/RBF
+   :sigmoid svm_parameter/SIGMOID})
+
+(def svm-types
+  {:c-svc svm_parameter/C_SVC
+   :epsilon-svr svm_parameter/EPSILON_SVR
+   :nu-svc svm_parameter/NU_SVC
+   :nu-svr svm_parameter/NU_SVR
+   :one-class svm_parameter/ONE_CLASS})
+
+(def default-hyperparameters {:kernel-type (:rbf kernel-types)
+                              :svm-type (:c-svc svm-types)
+                              :C 1               ; for c-svc, epsilon-svr and nu-svr
+                              :cache-size 100    ; in MB
+                              :coef0 0           ; for poly and sigmoid
+                              :degree 3          ; for poly
+                              :eps 1e-3          ; stopping criteria
+                              :gamma 0           ; for poly, rbf and sigmoid
+                              :nr-weight 0       ; for c-svc
+                              :nu 0.5            ; for nu-svc, one-class and nu-svr
+                              :p 0.1             ; for epsilon-svr
+                              :probability 0     ; do probability estimates
+                              :shrinking 1       ; use the shrinking heuristic
+                              :weight (double-array 0) ; for c-svc
+                              :weight-label (int-array 0) ; for c-svc
+                              })
+
+(defn- format-hyperparameters
+  "Define all the hyperparameters required by a SVM trainer"
+  [hyperparameters]
+  (let [params (merge default-hyperparameters hyperparameters)
+        parameters (new svm_parameter)]
+    (doseq [[param v] params]
+      ;; let form here prevents linter from complaining about unused return val
+      (let [x (Reflector/setInstanceField parameters (str/replace (name param) "-" "_") v)]
+        x))
+    parameters))
+
+(defn train
+  "Train a Linear SVM model for a given problem with specified parameters"
+  [training-set-path hyperparameters]
+  (let [problem-obj (problem training-set-path)
+        params-obj (format-hyperparameters hyperparameters)]
+    (when-let [error (svm/svm_check_parameter problem-obj params-obj)]
+      (throw (Exception. error)))
+    (svm/svm_train problem-obj params-obj)))
+#+END_SRC
+
+* Save
+
+Once the model is created and in-memory, we have to be able to save it on the file system and reload it in memory as required.
+
+#+NAME: save model
+#+BEGIN_SRC clojure :results silent
+(defn save
+  "Save a SVM model on the file system. Return the list of files that got saved
+  on the file system."
+  [model filepath]
+  (svm/svm_save_model filepath model)
+  [filepath])
+#+END_SRC
+
+* Load
+
+#+NAME: load model
+#+BEGIN_SRC clojure :results silent
+(defn load
+  "Load a SVM model from the file system into memory"
+  [filepath]
+  (svm/svm_load_model ^String filepath))
+#+END_SRC
+
+* Predict
+
+#+NAME: predict
+#+BEGIN_SRC clojure
+(defn- create-svm-node
+  "Create a `svm_node` at `index` with `value`. If `value` is empty then it
+  returns nil otherwise it returns the `svm_node`"
+  [index value]
+  (when-let [value (parsing/parse-double value)]
+    (let [node (new svm_node)]
+      (set! (. node index) (inc index))
+      (set! (. node value) value)
+      node)))
+
+(defn predict
+  "Predict the class/label of `features` given `model`. `features` is a vector
+  of feature values. If the training set has been scaled before training, then
+  `features` should be scaled with the same feature scaling function before
+  being used to predict a class/label. The predicted class label is returned."
+  [model _selected-features _hyperparameters feature-vector]
+  (svm/svm_predict model (->> feature-vector
+                              (keep-indexed create-svm-node)
+                              into-array)))
+#+END_SRC

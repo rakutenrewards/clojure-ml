@@ -2,8 +2,24 @@
   :description "Library for ML model training and serving."
   :url "http://github.com/Curbside/curbside-clojure-ml"
   :dependencies [[org.clojure/clojure "1.10.1"]
+                 [org.clojure/data.csv "0.1.4"]
                  [clj-time "0.15.2"]
-                 [nz.ac.waikato.cms.weka/weka-dev "3.9.3"]]
+                 [medley "1.2.0"]
+                 [org.clojure/math.combinatorics "0.1.6"]
+                 [com.climate/claypoole "1.1.4"]
+
+                 ;; weka ML
+                 [nz.ac.waikato.cms.weka/weka-dev "3.9.3"]
+
+                 ;; SVM
+                 [de.bwaldvogel/liblinear "2.30"]
+                 [tw.edu.ntu.csie/libsvm "3.24"]
+
+                 ;; Graphviz
+                 [guru.nidi/graphviz-java "0.11.0"]
+
+                 ;; xgboost
+                 [ml.dmlc/xgboost4j "0.90"]]
 
   :profiles {:uberjar {:aot :all}
              :ci [{:plugins [[test2junit "1.3.3"]]}]}

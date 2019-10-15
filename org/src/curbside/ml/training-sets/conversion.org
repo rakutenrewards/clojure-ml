@@ -1,0 +1,335 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/training_sets/conversion.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: Dataset Conversions
+
+* Table of Contents                                             :toc:noexport:
+- [[#introduction][Introduction]]
+  - [[#namespaces-configuration][Namespaces Configuration]]
+- [[#csv-to-sparse-svm-training-set][CSV to sparse SVM training set]]
+- [[#csv-and-arff-training-set][CSV and ARFF training set]]
+- [[#csv-and-plain-data-structures][CSV and plain data structures]]
+- [[#map-and-vectors][Map and vectors]]
+- [[#tests][Tests]]
+  - [[#namespace-definition][Namespace definition]]
+  - [[#csv-and-plain-data-structures-1][CSV and plain data structures]]
+  - [[#maps-and-vectors][Maps and vectors]]
+
+* Introduction
+** Namespaces Configuration
+
+#+BEGIN_SRC clojure
+(ns curbside.ml.training-sets.conversion
+  (:require [clojure.java.io :as io]
+            [clojure.data.csv :as csv]
+            [clojure.string :as string]
+            [curbside.ml.utils.parsing :as parsing])
+  (:import (weka.core.converters CSVSaver)
+           (weka.filters Filter)
+           (weka.filters.unsupervised.attribute NumericToNominal)))
+#+END_SRC
+
+* CSV to sparse SVM training set
+
+The format used by the LIBLINEAR library is the same as the one used by the LIBSVM one. The first value is the number that defines the class, usually \([0 -1]\). Then all features' value are separated by a space. Only the non-null features are written to the file. For instance, =1:0.5483= means that the first feature has value =0.5483=.
+
+A file looks like:
+
+#+begin_example
+-1 1:-766 2:128 3:0.140625 4:0.304688 5:0.234375 6:0.140625 7:0.304688 8:0.234375
+-1 1:-726 2:131 3:0.129771 4:0.328244 5:0.229008 6:0.129771 7:0.328244 8:0.229008
+
+-1 1:-764 2:124 3:0.137097 4:0.322581 5:0.233871 6:0.137097 7:0.322581 8:0.233871
+-1 1:-584 2:130 3:0.153846 4:0.392308 5:0.184615 6:0.153846 7:0.392308 8:0.184615
+-1 1:-866 2:124 3:0.193548 4:0.169355 5:0.314516 6:0.193548 7:0.169355 8:0.314516
+-1 1:-662 2:120 3:0.25 4:0.216667 5:0.275 6:0.25 7:0.216667 8:0.275
+-1 1:-518 2:120 3:0.283333 4:0.233333 5:0.258333 6:0.283333 7:0.233333 8:0.258333
+-1 1:-574 2:120 3:0.241667 4:0.225 5:0.275 6:0.241667 7:0.225 8:0.275
+-1 1:-962 2:133 3:0.180451 4:0.142857 5:0.338346 6:0.180451 7:0.142857 8:0.338346
+-1 1:-568 2:120 3:0.275 4:0.241667 5:0.25 6:0.275 7:0.241667 8:0.25
+-1 1:-778 2:116 3:0.206897 4:0.172414 5:0.301724 6:0.206897 7:0.172414 8:0.301724
+-1 1:-876 2:123 3:0.203252 4:0.162602 5:0.300813 6:0.203252 7:0.162602 8:0.300813
+-1 1:-880 2:123 3:0.195122 4:0.154472 5:0.300813 6:0.195122 7:0.154472 8:0.300813
+-1 1:-976 2:123 3:0.195122 4:0.138211 5:0.308943 6:0.195122 7:0.138211 8:0.308943
+-1 1:-768 2:117 3:0.188034 4:0.153846 5:0.316239 6:0.188034 7:0.153846 8:0.316239
+-1 1:-536 2:110 3:0.190909 4:0.281818 5:0.245455 6:0.190909 7:0.281818 8:0.245455
+-1 1:-514 2:120 3:0.225 4:0.208333 5:0.308333 6:0.225 7:0.208333 8:0.308333
+#+end_example
+
+The code to transform a CSV file into a LIBSVM one is:
+
+#+NAME: csv to libsvm training set
+#+begin_src clojure :results silent :session
+(defn csv-to-libsvm
+  "convert a csv training set file into a libsvm one. the first column is the
+  class, the other columns are the features."
+  [csv-file svm-file]
+  (io/delete-file svm-file true)
+  (with-open [reader (io/reader csv-file)
+              writer (io/writer svm-file :append true)]
+    (doseq [[class & features] (rest (csv/read-csv reader))]
+      (.write writer (str class " " (->> features
+                                         (map-indexed (fn [feature value]
+                                                        (if (empty? value)
+                                                          ""
+                                                          (str (inc feature) ":" value " "))))
+                                         (apply str)
+                                         clojure.string/trim) "\n")))))
+#+end_src
+
+* CSV and ARFF training set
+
+The [[https://www.cs.waikato.ac.nz/ml/weka/arff.html][ARFF (Attribute-Relation File Format)]] is Weka's internal training set format. It is basically a CSV file with special header information that describes each of the columns.
+
+#+begin_example
+   % 1. Title: Iris Plants Database
+   %
+   % 2. Sources:
+   %      (a) Creator: R.A. Fisher
+   %      (b) Donor: Michael Marshall (MARSHALL%PLU@io.arc.nasa.gov)
+   %      (c) Date: July, 1988
+   %
+   @RELATION iris
+
+   @ATTRIBUTE sepallength  NUMERIC
+   @ATTRIBUTE sepalwidth   NUMERIC
+   @ATTRIBUTE petallength  NUMERIC
+   @ATTRIBUTE petalwidth   NUMERIC
+   @ATTRIBUTE class        {Iris-setosa,Iris-versicolor,Iris-virginica}
+
+   @DATA
+   5.1,3.5,1.4,0.2,Iris-setosa
+   4.9,3.0,1.4,0.2,Iris-setosa
+   4.7,3.2,1.3,0.2,Iris-setosa
+   4.6,3.1,1.5,0.2,Iris-setosa
+   5.0,3.6,1.4,0.2,Iris-setosa
+   5.4,3.9,1.7,0.4,Iris-setosa
+   4.6,3.4,1.4,0.3,Iris-setosa
+   5.0,3.4,1.5,0.2,Iris-setosa
+   4.4,2.9,1.4,0.2,Iris-setosa
+   4.9,3.1,1.5,0.1,Iris-setosa
+#+end_example
+
+With the ARFF format, when we take a CSV file and convert it into ARFF, all the attributes (features) of the dataset are marked as =numeric= features including the =label= column. Depending on the algorithm used the type of the =label= attribute needs to be =nominal= or =numeric=. This is the reason why we have a =class-type= optional parameter that will instruct the function how we have to define the =label= attribute. This determination is performed sooner in the training pipeline. The way to perform this transformation in Weka is by using an "attribute filter". That attribute filter will convert a numeric attribute in a nominal one and will take care to properly create the enumeration of possible classes.
+
+The code to transform a CSV file into a ARFF file that can then be consumed by the different algorithms implemented in Weka is:
+
+#+NAME: csv to arff in memory
+#+BEGIN_SRC clojure
+(defn csv-to-arff
+  "convert a csv training set file into a ARFF one. Returns the ARFF object in
+  memory."
+  ([csv-file predictor-type]
+   (let [arff (weka.core.converters.ConverterUtils$DataSource. csv-file)
+         instances (doto (.getDataSet arff) (.setClassIndex 0))]
+     (if (= :classification predictor-type)
+       (let [filter (doto (NumericToNominal.)
+                      (.setOptions (into-array String ["-R" "first"]))
+                      (.setInputFormat instances))]
+         (Filter/useFilter instances filter))
+       instances)))
+  ([csv-file arff-file predictor-type]
+   (let [arff (csv-to-arff csv-file predictor-type)]
+     (with-open [writer (io/writer arff-file)]
+       (.write writer (.toString arff)))
+     arff)))
+#+END_SRC
+
+#+NAME: arff to csv
+#+BEGIN_SRC clojure
+(defn arff-to-csv
+  [training-set sampled-training-set-file]
+  (let [sampled-training-set-arff-file (string/replace sampled-training-set-file ".csv" ".arff")
+        csv-saver (CSVSaver.)]
+    (with-open [writer (io/writer sampled-training-set-arff-file)]
+      (.write writer (.toString training-set)))
+    (CSVSaver/runFileSaver csv-saver (into-array String ["-i" sampled-training-set-arff-file
+                                                         "-o" sampled-training-set-file]))
+    ;; Removing the `?` character for missing values
+    ;; This can't be done with the `CSVSaver` API since
+    ;; it doesn't accept empty values...
+    (spit sampled-training-set-file (-> (slurp sampled-training-set-file)
+                                        (string/replace ",?," ",,")
+                                        (string/replace ",?" ",")))))
+#+END_SRC
+
+* CSV and plain data structures
+
+A training set can be represented as a sequence of maps where each map contains the same keys, being the features and the label of a training set example.
+
+When parsing from a CSV file, the values of the rows are converted to double if possible. Boolean values are converted to doubles, where a 1.0 means true and a 0.0 means false.
+
+Where converting a training set to CSV, the order of the column is important, as machine learning algorithms training directly on CSV files will use the order of the columns as the order of the features. Therefore, When converting from maps to a CSV file, a vector of keys in order must be supplied.
+
+#+BEGIN_SRC clojure
+(defn csv-column-keys
+  "Returns the keys in the CSV's header. The keys are put in a vector in the same
+  order they appear in the CSV "
+  [csv-path]
+  (with-open [reader (io/reader csv-path)]
+    (mapv keyword (first (csv/read-csv reader)))))
+
+(defn- parse-row-values
+  [csv-row]
+  (mapv #(try (parsing/parse-double %)
+              (catch Exception _e %))
+        csv-row))
+
+(defn csv-to-maps
+  "Converts a csv training set to a vector of maps, where each map has the same
+  keys, as defined in the header of the CSV file"
+  [csv-path]
+  (with-open [reader (io/reader csv-path)]
+    (let [data (csv/read-csv reader)
+          header (map keyword (first data))
+          rows (map parse-row-values (rest data))]
+      (mapv zipmap
+            (repeat header)
+            rows))))
+
+(defn- valid-keys-for-header?
+  [keys-in-order maps]
+  (or (empty? maps)
+      (= (set keys-in-order)
+         (set (keys (first maps))))))
+
+(defn maps-to-csv
+  "Writes a sequence of `maps` (which are assumed to contain the same keys) to a
+  CSV at `output-path`. The columns are in the order specified by
+  `keys-in-order`. `keys-in-order` must contains all the keys present in the
+  maps."
+  [output-path keys-in-order maps]
+  {:pre [(valid-keys-for-header? keys-in-order maps)]}
+  (let [header (map name keys-in-order)
+        rows (if (empty? keys-in-order)
+               []
+               (mapv (apply juxt keys-in-order) maps))]
+    (with-open [writer (io/writer output-path)]
+      (csv/write-csv writer (concat [header] rows)))))
+#+END_SRC
+
+* Map and vectors
+
+#+BEGIN_SRC clojure
+(defn feature-map-to-vector
+  "Converts a map of features to a vector using a vector of feature-names."
+  [feature-names feature-map]
+  (mapv (fn [n] (get feature-map n)) feature-names))
+#+END_SRC
+
+* Tests
+
+** Namespace definition
+
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/training_sets/conversion_test.clj
+(ns curbside.ml.training-sets.conversion-test
+  (:require
+   [clojure.string :as string]
+   [clojure.test :refer [deftest is testing]]
+   [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.utils.tests :as tutils]))
+#+END_SRC
+
+** CSV and plain data structures
+
+#+NAME: csv-plain-data-tests
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/training_sets/conversion_test.clj
+(def an-empty-csv "label,a,b,c\n")
+(def a-header-only-csv "label,a,b,c\n")
+
+(def a-csv
+  (string/join "\n"
+               ["label,a,b,c"
+                "1.0,2.0,3.0,2.0"
+                "10.0,1.0,0.0,0.0\n"]))
+(def some-maps [{:b 3.0
+                 :a 2.0
+                 :label 1.0
+                 :c 2.0}
+                {:a 1.0
+                 :b 0.0
+                 :c 0.0
+                 :label 10.0}])
+
+(def a-csv-with-missing-values
+  (string/join "\n"
+               ["label,a,b,c"
+                "23.0,,2.0,"
+                ",1.0,,0.0\n"]))
+(def some-maps-with-nil-keys [{:label 23.0
+                               :a nil
+                               :b 2.0
+                               :c nil}
+                              {:label nil
+                               :a 1.0
+                               :b nil
+                               :c 0.0}])
+
+(def a-csv-with-boolean-label
+  (string/join "\n"
+               ["label,a"
+                "true,2.0"
+                "false,10.0"]))
+
+(def a-csv-with-string-labels
+  (string/join "\n"
+               ["label,a"
+                "cat,2.0"
+                "dog,10.0\n"]))
+(def some-maps-with-string-labels [{:label "cat"
+                                    :a 2.0}
+                                   {:label "dog"
+                                    :a 10.0}])
+
+(defn is-csv-to-maps-conversion-valid?
+  [csv-content expected-maps]
+  (let [csv-path (tutils/create-temp-csv-path)]
+    (spit csv-path csv-content)
+    (is (= expected-maps (conversion/csv-to-maps csv-path)))))
+
+(deftest test-csv-to-maps
+  (testing "testing conversion from csv to maps"
+    (is-csv-to-maps-conversion-valid? an-empty-csv [])
+    (is-csv-to-maps-conversion-valid? a-header-only-csv [])
+    (is-csv-to-maps-conversion-valid? a-csv some-maps)
+    (is-csv-to-maps-conversion-valid? a-csv-with-missing-values some-maps-with-nil-keys)
+    (is-csv-to-maps-conversion-valid? a-csv-with-boolean-label
+                                      [{:label 1.0
+                                        :a 2.0}
+                                       {:label 0.0
+                                        :a 10.0}])
+    (is-csv-to-maps-conversion-valid? a-csv-with-string-labels some-maps-with-string-labels)))
+
+(defn is-maps-to-csv-conversion-valid?
+  [expected-csv-content maps column-keys]
+  (let [csv-path (tutils/create-temp-csv-path)]
+    (conversion/maps-to-csv csv-path column-keys maps)
+    (is (= expected-csv-content (slurp csv-path)))))
+
+(deftest test-maps-to-csv
+  (testing "testing conversion from maps to csv"
+    (is-maps-to-csv-conversion-valid? a-header-only-csv
+                                      []
+                                      [:label :a :b :c])
+    (is-maps-to-csv-conversion-valid? a-csv
+                                      some-maps
+                                      [:label :a :b :c])
+    (is-maps-to-csv-conversion-valid? a-csv-with-missing-values
+                                      some-maps-with-nil-keys
+                                      [:label :a :b :c])
+    (is-maps-to-csv-conversion-valid? a-csv-with-string-labels
+                                      some-maps-with-string-labels
+                                      [:label :a])))
+#+END_SRC
+
+** Maps and vectors
+
+#+NAME: maps-and-vectors-tests
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/training_sets/conversion_test.clj
+(deftest test-feature-map-to-vector
+  (testing "given a feature map, when converting to vector, only selected features are kept"
+    (is (= [1 2 3] (conversion/feature-map-to-vector [:a :b :c] {:a 1 :b 2 :c 3 :d "danger"}))))
+  (testing "given a feature map, when converting to vector, features are put in the order of the inputed selected features"
+    (is (= [1 2 3 4] (conversion/feature-map-to-vector [:b-2 :c :b-1 :a]
+                                                       {:c 2 :b-2 1 :a 4 :b-1 3})))))
+#+END_SRC

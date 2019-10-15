@@ -1,0 +1,406 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../src/curbside/ml/models.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: ML Algorithms Interface
+
+* Table of Contents                                            :toc:noexport:
+- [[#namespace-definition][Namespace definition]]
+- [[#multimethods][Multimethods]]
+  - [[#xgboost][XGBoost]]
+  - [[#decision-trees][Decision trees]]
+  - [[#svm][SVM]]
+  - [[#linear-svm][Linear SVM]]
+- [[#inference][Inference]]
+- [[#evaluation][Evaluation]]
+- [[#hyperparameters-optimization][Hyperparameters optimization]]
+
+* Namespace definition
+
+#+BEGIN_SRC clojure
+(ns curbside.ml.models
+  (:refer-clojure :exclude [load])
+  (:require
+   [clojure.data.csv :as csv]
+   [clojure.java.io :as io]
+   [clojure.math.combinatorics :as combinatorics]
+   [com.climate.claypoole :as cp]
+   [curbside.ml.metrics :as metrics]
+   [curbside.ml.models.xgboost :as xgboost]
+   [curbside.ml.models.decision-trees :as decision-trees]
+   [curbside.ml.models.linear-svm :as linear-svm]
+   [curbside.ml.models.svm :as svm]
+   [curbside.ml.utils.parsing :as parsing]
+   [curbside.ml.training-sets.scaling :as scaling]
+   [curbside.ml.training-sets.conversion :as conversion])
+  (:import
+   (java.io File)
+   (java.util ArrayList)
+   (weka.classifiers.evaluation NominalPrediction)))
+#+END_SRC
+
+* Multimethods
+
+All models implement a few common functions:
+
+1. =save= to persist a trained model to disk.
+2. =load= to load a trained model from disk.
+3. =train= to train the model on a given problem.
+4. =predict= to make a prediction
+5. =dispose= to free allocated memory, if applicable
+
+We will define multimethods for all of these operations. These multimethods will switch based on a keyword specifying the algorithm to use. Using a keyword allows us to easily specify the algorithm in the pipeline configs.
+
+#+BEGIN_SRC clojure
+(defmulti save
+  (fn [algorithm model filepath]
+    algorithm))
+
+(defmulti load
+  (fn [algorithm filepath]
+    algorithm))
+
+(defmulti load-from-bytes
+  (fn [algorithm bytes]
+    algorithm))
+
+(defmulti train
+  (fn [algorithm predictor-type training-set-path hyperparameters]
+    algorithm))
+
+(defmulti predict
+  "Not meant to be called directly. Use =infer= instead."
+  (fn [algorithm predictor-type model selected-features hyperparameters feature-vector]
+    algorithm))
+
+(defmulti dispose
+  (fn [algorithm model]
+    algorithm))
+
+(defmethod dispose :default
+  [_ _]
+  nil)
+#+END_SRC
+
+** XGBoost
+
+#+BEGIN_SRC clojure
+(defmethod save :xgboost
+  [_ model filepath]
+  (xgboost/save model filepath))
+
+(defmethod load :xgboost
+  [_ filepath]
+  (xgboost/load filepath))
+
+(defmethod load-from-bytes :xgboost
+  [_ bytes]
+  (xgboost/load-from-bytes bytes))
+
+(defmethod train :xgboost
+  [_ _predictor-type training-set-path params]
+  (xgboost/train training-set-path params))
+
+(defmethod predict :xgboost
+  [_ _predictor-type model seleted-features hyperparameters feature-vector]
+  (xgboost/predict model seleted-features hyperparameters feature-vector))
+
+(defmethod dispose :xgboost
+  [_ model]
+  (xgboost/dispose model))
+#+END_SRC
+
+** Decision trees
+
+#+BEGIN_SRC clojure
+(defmethod save :c4.5
+  [_algorithm model filepath]
+  (decision-trees/save model filepath))
+
+(defmethod save :m5p
+  [_algorithm model filepath]
+  (decision-trees/save model filepath))
+
+(defmethod save :random-forest
+  [_algorithm model filepath]
+  (decision-trees/save model filepath))
+
+(defmethod load :c4.5
+  [_ file]
+  (decision-trees/load file))
+
+(defmethod load :m5p
+  [_ file]
+  (decision-trees/load file))
+
+(defmethod load :random-forest
+  [_ file]
+  (decision-trees/load file))
+
+(defmethod load-from-bytes :c4.5
+  [bytes]
+  (decision-trees/load-from-bytes bytes))
+
+(defmethod load-from-bytes :m5p
+  [bytes]
+  (decision-trees/load-from-bytes bytes))
+
+(defmethod load-from-bytes :random-forest
+  [bytes]
+  (decision-trees/load-from-bytes bytes))
+
+(defmethod train :c4.5
+  [algorithm predictor-type training-set hyperparameters]
+  (decision-trees/train algorithm predictor-type training-set hyperparameters))
+
+(defmethod train :m5p
+  [algorithm predictor-type training-set hyperparameters]
+  (decision-trees/train algorithm predictor-type training-set hyperparameters))
+
+(defmethod train :random-forest
+  [algorithm predictor-type training-set hyperparameters]
+  (decision-trees/train algorithm predictor-type training-set hyperparameters))
+
+(defmethod predict :c4.5
+  [_ predictor-type model selected-features _hyperparameters feature-vector]
+  (decision-trees/predict predictor-type model selected-features feature-vector))
+
+(defmethod predict :m5p
+  [_ predictor-type model selected-features _hyperparameters feature-vector]
+  (decision-trees/predict predictor-type model selected-features feature-vector))
+
+(defmethod predict :random-forest
+  [_ predictor-type model selected-features _hyperparameters feature-vector]
+  (decision-trees/predict predictor-type model selected-features feature-vector))
+#+END_SRC
+
+** SVM
+
+#+BEGIN_SRC clojure
+(defmethod save :svm
+  [_ model filepath]
+  (svm/save model filepath))
+
+(defmethod load :svm
+  [_ filepath]
+  (svm/load filepath))
+
+(defmethod train :svm
+  [_ _predictor-type training-set-path hyperparameters]
+  (svm/train training-set-path hyperparameters))
+
+(defmethod predict :svm
+  [_ _predictor-type model seleted-features hyperparameters feature-vector]
+  (svm/predict model seleted-features hyperparameters feature-vector))
+#+END_SRC
+
+** Linear SVM
+
+#+BEGIN_SRC clojure
+(defmethod save :lsvm
+  [_ model filepath]
+  (linear-svm/save model filepath))
+
+(defmethod load :lsvm
+  [_ filepath]
+  (linear-svm/load filepath))
+
+(defmethod load-from-bytes :lsvm
+  [_ bytes]
+  (linear-svm/load bytes))
+
+(defmethod train :lsvm
+  [_ _predictor-type training-set-csv-path hyperparameters]
+  (linear-svm/train training-set-csv-path hyperparameters))
+
+(defmethod predict :lsvm
+  [_ _predictor-type model _selected-features _hyperparameters feature-vector]
+  (linear-svm/predict model feature-vector))
+#+END_SRC
+
+* Inference
+
+#+BEGIN_SRC clojure
+(defn- parse-feature-map
+  [selected-features feature-map]
+  (reduce-kv #(assoc % %2 (parsing/parse-double %3))
+             {}
+             (select-keys feature-map selected-features)))
+
+(defn- feature-scaling
+  [feature-scaling-fns scaling-factors feature-map]
+  (if feature-scaling-fns
+    (scaling/scale-feature-map feature-scaling-fns scaling-factors feature-map)
+    feature-map))
+
+(defn- unscale-inference
+  [label-scaling-fns scaling-factors prediction]
+  (if label-scaling-fns
+    (scaling/unscale-inference label-scaling-fns scaling-factors prediction)
+    prediction))
+
+(defn infer
+  "This function performs the inference steps to perform predictions using a
+  single trained model. It includes data preparation and post-processing
+  operations required by all models. Such operations include:
+  - Feature selection
+  - Feature scaling (optional)
+  - Querying a model prediction
+  - Scaling the output of the model (optional)"
+  [algorithm predictor-type model selected-features hyperparameters feature-map
+   & {:keys [scaling-factors feature-scaling-fns label-scaling-fns]}]
+  (->> feature-map
+       (parse-feature-map selected-features)
+       (feature-scaling feature-scaling-fns scaling-factors)
+       (conversion/feature-map-to-vector selected-features)
+       (predict algorithm predictor-type model selected-features hyperparameters)
+       (unscale-inference label-scaling-fns scaling-factors)))
+#+END_SRC
+
+* Evaluation
+
+#+BEGIN_SRC clojure
+(defn- to-temp-csv-path
+  [header rows]
+  (let [file (doto (File/createTempFile "data_" ".csv")
+               (.deleteOnExit))]
+    (with-open [w (io/writer file)]
+      (csv/write-csv w (concat [header] rows)))
+    (.getPath file)))
+
+(defn- classify
+  [actual predicted]
+  (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
+
+(defn- evaluate-fold
+  [algorithm selected-features hyperparameters feature-scaling-fns label-scaling-fns scaling-factors training-csv-path validation-set eval-atoms predictor-type predictions]
+  (let [model (train algorithm predictor-type training-csv-path hyperparameters)]
+    (doseq [[target & features] validation-set]
+      (let [features-map (into {} (map vector selected-features features))
+            predicted-value (infer algorithm predictor-type model selected-features hyperparameters features-map
+                                   :scaling-factors scaling-factors
+                                   :feature-scaling-fns feature-scaling-fns
+                                   :label-scaling-fns label-scaling-fns )]
+        (when (= predictor-type :classification)
+          (.add predictions (classify (Double/parseDouble target) predicted-value)))
+        (let [diff (- (parsing/parse-double target) predicted-value)
+              abs-error (Math/abs diff)
+              square-error (* diff diff)]
+          (swap! (:abs-error eval-atoms) #(+ abs-error %))
+          (swap! (:square-error eval-atoms) #(+ square-error %))
+          (swap! (:n eval-atoms) inc))))
+    (dispose algorithm model)))
+
+(defn- cross-validate
+  "Evaluate the performance of a model using k-fold cross-validation. Takes a
+  training set CSV file as input and the number of `k-folds` to use for the
+  cross validation. If `multithreads` is `true`, then each fold will be
+  processed on its own thread in parallel."
+  [algorithm predictor-type selected-features hyperparameters training-set-path
+   & {:keys [k-folds multithreads scaling-factors feature-scaling-fns label-scaling-fns]}]
+  {:pre [(some #{:classification :regression} #{predictor-type})]}
+  (let [k-folds (or k-folds 10)
+        mode (or predictor-type :classification)
+        multithreads (or multithreads false)
+        [header & training-set] (with-open [in-file (io/reader training-set-path)]
+                                   (doall
+                                    (csv/read-csv in-file)))
+        folds (partition-all (/ (count training-set) k-folds) (shuffle training-set))
+        eval-atoms {:n (atom 0)
+                    :abs-error (atom 0)
+                    :square-error (atom 0)}
+        predictions (ArrayList.)
+        futures (atom [])]
+
+    (loop [processed-folds 1
+           validation-set (first folds)
+           training-set-folds (rest folds)]
+      (let [training-csv-path (to-temp-csv-path header (apply concat training-set-folds))]
+        (when (<= processed-folds k-folds)
+          (if multithreads
+            (swap! futures conj (future (evaluate-fold algorithm
+                                                       selected-features
+                                                       hyperparameters
+                                                       feature-scaling-fns
+                                                       label-scaling-fns
+                                                       scaling-factors
+                                                       training-csv-path
+                                                       validation-set
+                                                       eval-atoms
+                                                       mode
+                                                       predictions)))
+            (evaluate-fold algorithm
+                           selected-features
+                           hyperparameters
+                           feature-scaling-fns
+                           label-scaling-fns
+                           scaling-factors
+                           training-csv-path
+                           validation-set
+                           eval-atoms
+                           mode
+                           predictions))
+          (recur (inc processed-folds)
+                 (first training-set-folds)
+                 (conj (rest training-set-folds) validation-set)))))
+    (when multithreads
+      (doseq [f @futures]
+        @f))
+
+    (metrics/model-metrics mode predictions eval-atoms)))
+
+(defn evaluate
+  "Only cross-validate method is supported at the moment."
+  [algorithm predictor-type selected-features hyperparameters training-set-path
+   & {:keys [_k-folds _multithreads _scaling-factors _feature-scaling-fns _label-scaling-fns] :as options}]
+  (cross-validate algorithm predictor-type selected-features hyperparameters training-set-path hyperparameters options))
+#+END_SRC
+
+* Hyperparameters optimization
+
+#+BEGIN_SRC clojure
+(defn- grid-search
+  [algorithm predictor-type selected-features grid-parameters training-set-path
+   & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
+  (let [selection-metric (or selection-metric :roc-auc)
+        k-folds (or k-folds 2)
+        thread-count (or threads-pool 1)
+        params-keys (keys grid-parameters)
+        combos (->> (apply combinatorics/cartesian-product (vals grid-parameters))
+                    (map #(into {} (map (fn [x y] [x y])
+                                        params-keys
+                                        %))))
+        eval (fn [hyperparameters]
+               (let [result (evaluate algorithm
+                                      predictor-type
+                                      selected-features
+                                      hyperparameters
+                                      training-set-path
+                                      :scaling-factors scaling-factors
+                                      :k-folds k-folds
+                                      :feature-scaling-fns feature-scaling-fns
+                                      :label-scaling-fns label-scaling-fns)]
+                 {:optimal-params hyperparameters
+                  :selected-evaluation (get result selection-metric)
+                  :model-evaluations result}))
+        find-best (if (= (metrics/comparator selection-metric) <)
+                    min-key
+                    max-key)
+        evaluated-combos (cp/with-shutdown! [pool thread-count]
+                           (->> combos
+                                (cp/pmap pool eval)
+                                (doall)))
+        best-evaluation (apply find-best :selected-evaluation evaluated-combos)]
+    best-evaluation))
+
+(defn optimize-hyperparameters
+  "Only grid-search method is supported at the moment."
+  [algorithm predictor-type selected-features grid-parameters training-set-path
+   & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
+  (grid-search algorithm predictor-type selected-features grid-parameters training-set-path
+               :selection-metric selection-metric
+               :k-folds k-folds
+               :threads-pool threads-pool
+               :scaling-factors scaling-factors
+               :feature-scaling-fns feature-scaling-fns
+               :label-scaling-fns label-scaling-fns))
+#+END_SRC

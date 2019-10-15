@@ -6,8 +6,24 @@
 - =c4=
 - =random-forest=
 - =m5p=
-- =neural-net=
 - =xgboost=
+
+** Usage
+
+From your application code, you will need to require the =models= interface:
+#+BEGIN_SRC clojure
+(require '[curbside.ml.models])
+#+END_SRC
+
+The =model= namespace offers the following interface, based on the provided algorithm keyword (i.e. =:xgboost=)
+
+- save
+- load
+- dispose
+- train
+- evaluate
+- optimize-hyperparameters
+- infer
 
 ** Releasing to Artifactory
 

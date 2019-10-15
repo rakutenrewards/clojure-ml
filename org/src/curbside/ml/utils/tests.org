@@ -1,0 +1,36 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../../test/curbside/ml/utils/tests.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: Test Utilities
+
+* Table of Contents                                             :toc:noexport:
+- [[#introduction][Introduction]]
+  - [[#namespace-definition][Namespace Definition]]
+- [[#file-utilities][File utilities]]
+
+* Introduction
+
+This file contains utility functions for testing purposes.
+
+** Namespace Definition
+
+#+NAME: test-fixtures namespace
+#+BEGIN_SRC clojure
+(ns curbside.ml.utils.tests
+  (:import
+   [java.io File]))
+#+END_SRC
+
+* File utilities
+
+#+BEGIN_SRC clojure
+(defn create-temp-csv-path
+  ([]
+   (let [file (doto (File/createTempFile "test_" ".csv")
+                (.deleteOnExit))]
+     (.getPath file)))
+  ([content]
+   (let [path (create-temp-csv-path)]
+     (spit path content)
+     path)))
+#+END_SRC

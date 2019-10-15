@@ -19,7 +19,8 @@ This namespace contains utilities used in pair with Weka.
   (:require
    [clojure.java.io :as io])
   (:import
-   (weka.core Instances)))
+   (java.util ArrayList)
+   (weka.core Attribute DenseInstance Instances)))
 #+END_SRC
 
 * Defining Problems
@@ -41,4 +42,28 @@ This is because of this ubiquity that we define the =problem= function that deal
                     training-set)]
     (.setClassIndex instances (or class-col-index 0))
     instances))
+#+END_SRC
+
+#+BEGIN_SRC clojure
+(defn- attribute-list
+  [predictor-type selected-features]
+  (->> selected-features
+       (map name)
+       (map #(Attribute. %))
+       (cons (if (= :classification predictor-type)
+               (Attribute. "@@class@@" ["0.0" "1.0"])
+               (Attribute. "@@class@@")))
+       (#(ArrayList. %))))
+
+(defn create-instance
+  [predictor-type selected-features feature-vector]
+  (let [attributes (attribute-list predictor-type selected-features)
+        dataset (doto (Instances. "test-instances" attributes 1)
+                  (.setClassIndex 0))
+        instance (DenseInstance. (.numAttributes dataset))]
+    (doseq [[attribute val] (map vector (rest attributes) feature-vector)]
+      (when val
+        (.setValue instance attribute (double val))))
+    (.setDataset instance dataset)
+    instance))
 #+END_SRC
