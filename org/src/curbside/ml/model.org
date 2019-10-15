@@ -249,6 +249,7 @@ We will define multimethods for all of these operations. These multimethods will
     best-evaluation))
 
 (defn optimize-hyperparameters
+  "Only grid-search method is supported at the moment."
   [algorithm predictor-type selected-features grid-parameters training-set-file
    & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
   (grid-search algorithm predictor-type selected-features grid-parameters training-set-file
