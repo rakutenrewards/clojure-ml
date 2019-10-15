@@ -10,11 +10,9 @@
 
 ** Usage
 
-From your application code, you will need to require the =model= interface, as well as all ML algorithm implementations.
-
+From your application code, you will need to require the =models= interface:
 #+BEGIN_SRC clojure
-(require '[curbside.ml.model]
-         '[curbside.ml.all-model-implementations])
+(require '[curbside.ml.models])
 #+END_SRC
 
 The =model= namespace offers the following interface, based on the provided algorithm keyword (i.e. =:xgboost=)

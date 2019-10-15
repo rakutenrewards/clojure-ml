@@ -1,4 +1,4 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../src/curbside/ml/model.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+PROPERTY: header-args:clojure :tangle ../../../../src/curbside/ml/models.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
 #+OPTIONS: toc:2
 
 #+TITLE: ML Algorithms Interface
@@ -6,6 +6,10 @@
 * Table of Contents                                            :toc:noexport:
 - [[#namespace-definition][Namespace definition]]
 - [[#multimethods][Multimethods]]
+  - [[#xgboost][XGBoost]]
+  - [[#decision-trees][Decision trees]]
+  - [[#svm][SVM]]
+  - [[#linear-svm][Linear SVM]]
 - [[#inference][Inference]]
 - [[#evaluation][Evaluation]]
 - [[#hyperparameters-optimization][Hyperparameters optimization]]
@@ -13,7 +17,7 @@
 * Namespace definition
 
 #+BEGIN_SRC clojure
-(ns curbside.ml.model
+(ns curbside.ml.models
   (:refer-clojure :exclude [load])
   (:require
    [clojure.data.csv :as csv]
@@ -21,6 +25,10 @@
    [clojure.math.combinatorics :as combinatorics]
    [com.climate.claypoole :as cp]
    [curbside.ml.metrics :as metrics]
+   [curbside.ml.models.xgboost :as xgboost]
+   [curbside.ml.models.decision-trees :as decision-trees]
+   [curbside.ml.models.linear-svm :as linear-svm]
+   [curbside.ml.models.svm :as svm]
    [curbside.ml.utils.parsing :as parsing]
    [curbside.ml.training-sets.scaling :as scaling]
    [curbside.ml.training-sets.conversion :as conversion])
@@ -71,6 +79,142 @@ We will define multimethods for all of these operations. These multimethods will
 (defmethod dispose :default
   [_ _]
   nil)
+#+END_SRC
+
+** XGBoost
+
+#+BEGIN_SRC clojure
+(defmethod save :xgboost
+  [_ model filepath]
+  (xgboost/save model filepath))
+
+(defmethod load :xgboost
+  [_ filepath]
+  (xgboost/load filepath))
+
+(defmethod load-from-bytes :xgboost
+  [_ bytes]
+  (xgboost/load-from-bytes bytes))
+
+(defmethod train :xgboost
+  [_ _predictor-type training-set-path params]
+  (xgboost/train training-set-path params))
+
+(defmethod predict :xgboost
+  [_ _predictor-type model seleted-features hyperparameters feature-vector]
+  (xgboost/predict model seleted-features hyperparameters feature-vector))
+
+(defmethod dispose :xgboost
+  [_ model]
+  (xgboost/dispose model))
+#+END_SRC
+
+** Decision trees
+
+#+BEGIN_SRC clojure
+(defmethod save :c4.5
+  [_algorithm model filepath]
+  (decision-trees/save model filepath))
+
+(defmethod save :m5p
+  [_algorithm model filepath]
+  (decision-trees/save model filepath))
+
+(defmethod save :random-forest
+  [_algorithm model filepath]
+  (decision-trees/save model filepath))
+
+(defmethod load :c4.5
+  [_ file]
+  (decision-trees/load file))
+
+(defmethod load :m5p
+  [_ file]
+  (decision-trees/load file))
+
+(defmethod load :random-forest
+  [_ file]
+  (decision-trees/load file))
+
+(defmethod load-from-bytes :c4.5
+  [bytes]
+  (decision-trees/load-from-bytes bytes))
+
+(defmethod load-from-bytes :m5p
+  [bytes]
+  (decision-trees/load-from-bytes bytes))
+
+(defmethod load-from-bytes :random-forest
+  [bytes]
+  (decision-trees/load-from-bytes bytes))
+
+(defmethod train :c4.5
+  [algorithm predictor-type training-set hyperparameters]
+  (decision-trees/train algorithm predictor-type training-set hyperparameters))
+
+(defmethod train :m5p
+  [algorithm predictor-type training-set hyperparameters]
+  (decision-trees/train algorithm predictor-type training-set hyperparameters))
+
+(defmethod train :random-forest
+  [algorithm predictor-type training-set hyperparameters]
+  (decision-trees/train algorithm predictor-type training-set hyperparameters))
+
+(defmethod predict :c4.5
+  [_ predictor-type model selected-features _hyperparameters feature-vector]
+  (decision-trees/predict predictor-type model selected-features feature-vector))
+
+(defmethod predict :m5p
+  [_ predictor-type model selected-features _hyperparameters feature-vector]
+  (decision-trees/predict predictor-type model selected-features feature-vector))
+
+(defmethod predict :random-forest
+  [_ predictor-type model selected-features _hyperparameters feature-vector]
+  (decision-trees/predict predictor-type model selected-features feature-vector))
+#+END_SRC
+
+** SVM
+
+#+BEGIN_SRC clojure
+(defmethod save :svm
+  [_ model filepath]
+  (svm/save model filepath))
+
+(defmethod load :svm
+  [_ filepath]
+  (svm/load filepath))
+
+(defmethod train :svm
+  [_ _predictor-type training-set-path hyperparameters]
+  (svm/train training-set-path hyperparameters))
+
+(defmethod predict :svm
+  [_ _predictor-type model seleted-features hyperparameters feature-vector]
+  (svm/predict model seleted-features hyperparameters feature-vector))
+#+END_SRC
+
+** Linear SVM
+
+#+BEGIN_SRC clojure
+(defmethod save :lsvm
+  [_ model filepath]
+  (linear-svm/save model filepath))
+
+(defmethod load :lsvm
+  [_ filepath]
+  (linear-svm/load filepath))
+
+(defmethod load-from-bytes :lsvm
+  [_ bytes]
+  (linear-svm/load bytes))
+
+(defmethod train :lsvm
+  [_ _predictor-type training-set-csv-path hyperparameters]
+  (linear-svm/train training-set-csv-path hyperparameters))
+
+(defmethod predict :lsvm
+  [_ _predictor-type model _selected-features _hyperparameters feature-vector]
+  (linear-svm/predict model feature-vector))
 #+END_SRC
 
 * Inference

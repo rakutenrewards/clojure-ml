@@ -1,4 +1,4 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/algorithms/decision_tree.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/models/decision_trees.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
 #+OPTIONS: toc:2
 
 #+TITLE: Decision Tree
@@ -24,12 +24,11 @@ The decision tree models namespace includes all the function that manage the cre
 ** Namespace Definition
 
 #+BEGIN_SRC clojure
-(ns curbside.ml.algorithms.decision-tree
+(ns curbside.ml.models.decision-trees
   (:refer-clojure :exclude [load])
   (:require
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [curbside.ml.model :as model]
    [curbside.ml.training-sets.conversion :as conversion]
    [curbside.ml.utils.weka :as weka])
   (:import
@@ -39,10 +38,10 @@ The decision tree models namespace includes all the function that manage the cre
             FileInputStream
             FileOutputStream
             ObjectInputStream
-            ObjectOutputStream StringReader)
+            ObjectOutputStream)
    (weka.classifiers AbstractClassifier)
    (weka.classifiers.trees RandomForest M5P J48)
-   (weka.core Instances DenseInstance Utils)))
+   (weka.core Utils)))
 #+END_SRC
 
 * Supported Hyperparameters
@@ -125,7 +124,7 @@ The decision tree models namespace includes all the function that manage the cre
   [hyperparameters]
   (serialize-options (merge default-params hyperparameters)))
 
-(defn- train
+(defn train
   "Train a Decision Tree model for a given training set csv with specified hyperparameters"
   [algorithm predictor-type training-set-csv hyperparameters]
   (let [tree (case algorithm
@@ -135,18 +134,6 @@ The decision tree models namespace includes all the function that manage the cre
     (.setOptions tree (parameters hyperparameters))
     (.buildClassifier tree (conversion/csv-to-arff training-set-csv predictor-type))
     tree))
-
-(defmethod model/train :c4.5
-  [algorithm predictor-type training-set hyperparameters]
-  (train algorithm predictor-type training-set hyperparameters))
-
-(defmethod model/train :m5p
-  [algorithm predictor-type training-set hyperparameters]
-  (train algorithm predictor-type training-set hyperparameters))
-
-(defmethod model/train :random-forest
-  [algorithm predictor-type training-set hyperparameters]
-  (train algorithm predictor-type training-set hyperparameters))
 #+END_SRC
 
 * Save Models
@@ -155,7 +142,7 @@ Once the model is created and in-memory, we have to be able to save it on the fi
 
 #+NAME: save model
 #+BEGIN_SRC clojure
-(defn- save
+(defn save
   "Save a decision tree model on the file system. Also save a `dot` representation
   of the decision tree model. Return the list of files that got saved on the
   file system."
@@ -177,25 +164,13 @@ Once the model is created and in-memory, we have to be able to save it on the fi
     (if graph?
       [filepath dot-file png-file]
       [filepath])))
-
-(defmethod model/save :c4.5
-  [_algorithm model filepath]
-  (save model filepath))
-
-(defmethod model/save :m5p
-  [_algorithm model filepath]
-  (save model filepath))
-
-(defmethod model/save :random-forest
-  [_algorithm model filepath]
-  (save model filepath))
 #+END_SRC
 
 * Load
 
 #+NAME: load model
 #+BEGIN_SRC clojure
-(defn- load
+(defn load
   "Load a decision tree model from the file system into memory"
   [filepath]
   (with-open [inp (-> (io/file filepath)
@@ -204,34 +179,10 @@ Once the model is created and in-memory, we have to be able to save it on the fi
                       ObjectInputStream.)]
     (.readObject inp)))
 
-(defmethod model/load :c4.5
-  [_ file]
-  (load file))
-
-(defmethod model/load :m5p
-  [_ file]
-  (load file))
-
-(defmethod model/load :random-forest
-  [_ file]
-  (load file))
-
-(defn- load-from-bytes
+(defn load-from-bytes
   [bytes]
   (with-open [input (io/input-stream bytes)]
     (.readObject (ObjectInputStream. input))))
-
-(defmethod model/load-from-bytes :c4.5
-  [bytes]
-  (load-from-bytes bytes))
-
-(defmethod model/load-from-bytes :m5p
-  [bytes]
-  (load-from-bytes bytes))
-
-(defmethod model/load-from-bytes :random-forest
-  [bytes]
-  (load-from-bytes bytes))
 #+END_SRC
 
 * Predict
@@ -246,16 +197,4 @@ When we want to classify/predict a new instance, we have to use the =create-inst
   [predictor-type ^AbstractClassifier model selected-features feature-vector]
   (let [instance (weka/create-instance predictor-type selected-features feature-vector)]
     (.classifyInstance model instance)))
-
-(defmethod model/predict :c4.5
-  [_ predictor-type model selected-features _hyperparameters feature-vector]
-  (predict predictor-type model selected-features feature-vector))
-
-(defmethod model/predict :m5p
-  [_ predictor-type model selected-features _hyperparameters feature-vector]
-  (predict predictor-type model selected-features feature-vector))
-
-(defmethod model/predict :random-forest
-  [_ predictor-type model selected-features _hyperparameters feature-vector]
-  (predict predictor-type model selected-features feature-vector))
 #+END_SRC

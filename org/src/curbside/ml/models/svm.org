@@ -1,4 +1,4 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/algorithms/svm.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/models/svm.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
 #+OPTIONS: toc:2
 
 #+TITLE: SVM
@@ -18,13 +18,12 @@ The SVM supports logistic regression and linear support vector machines. The lin
 ** Namespace Definition
 
 #+BEGIN_SRC clojure
-(ns curbside.ml.algorithms.svm
+(ns curbside.ml.models.svm
   (:refer-clojure :exclude [load])
   (:require
    [clojure.data.csv :as csv]
    [clojure.java.io :as io]
    [clojure.string :as str]
-   [curbside.ml.model :as model]
    [curbside.ml.utils.parsing :as parsing])
   (:import
    (clojure.lang Reflector)
@@ -154,7 +153,7 @@ Once the model is scaled we can train a model that will be used to make predicti
         x))
     parameters))
 
-(defn- train
+(defn train
   "Train a Linear SVM model for a given problem with specified parameters"
   [training-set-path hyperparameters]
   (let [problem-obj (problem training-set-path)
@@ -162,10 +161,6 @@ Once the model is scaled we can train a model that will be used to make predicti
     (when-let [error (svm/svm_check_parameter problem-obj params-obj)]
       (throw (Exception. error)))
     (svm/svm_train problem-obj params-obj)))
-
-(defmethod model/train :svm
-  [_ _predictor-type training-set-path params]
-  (train training-set-path params))
 #+END_SRC
 
 * Save
@@ -174,30 +169,22 @@ Once the model is created and in-memory, we have to be able to save it on the fi
 
 #+NAME: save model
 #+BEGIN_SRC clojure :results silent
-(defn- save
+(defn save
   "Save a SVM model on the file system. Return the list of files that got saved
   on the file system."
   [model filepath]
   (svm/svm_save_model filepath model)
   [filepath])
-
-(defmethod model/save :svm
-  [_ model filepath]
-  (save model filepath))
 #+END_SRC
 
 * Load
 
 #+NAME: load model
 #+BEGIN_SRC clojure :results silent
-(defn- load
+(defn load
   "Load a SVM model from the file system into memory"
   [filepath]
   (svm/svm_load_model ^String filepath))
-
-(defmethod model/load :svm
-  [_ filepath]
-  (load filepath))
 #+END_SRC
 
 * Predict
@@ -223,8 +210,4 @@ Once the model is created and in-memory, we have to be able to save it on the fi
   (svm/svm_predict model (->> feature-vector
                               (keep-indexed create-svm-node)
                               into-array)))
-
-(defmethod model/predict :svm
-  [_ _predictor-type model seleted-features hyperparameters feature-vector]
-  (predict model seleted-features hyperparameters feature-vector))
 #+END_SRC

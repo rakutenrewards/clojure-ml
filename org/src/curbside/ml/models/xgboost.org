@@ -1,4 +1,4 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/algorithms/xgboost.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/models/xgboost.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
 #+OPTIONS: toc:2
 
 #+TITLE: XGBoost Models
@@ -19,12 +19,11 @@ This document defines a simple Clojure interface to XGBoost, a library for gradi
 ** Namespace definition
 
 #+BEGIN_SRC clojure
-(ns curbside.ml.algorithms.xgboost
+(ns curbside.ml.models.xgboost
   (:refer-clojure :exclude [load])
   (:require
    [clojure.java.io :as io]
    [clojure.walk :as walk]
-   [curbside.ml.model :as model]
    [curbside.ml.utils.parsing :as parsing])
   (:import
    (ml.dmlc.xgboost4j LabeledPoint)
@@ -82,7 +81,7 @@ For the parameters to XGBoost
   [params]
   (walk/stringify-keys params))
 
-(defn- train
+(defn train
   [training-set-path params]
   (XGBoost/train
    (training-set->DMatrix training-set-path)
@@ -91,10 +90,6 @@ For the parameters to XGBoost
    {}
    (:obj-fn params)
    (:eval-fn params)))
-
-(defmethod model/train :xgboost
-  [_ _predictor-type training-set-path params]
-  (train training-set-path params))
 #+END_SRC
 
 * Dispose
@@ -102,15 +97,11 @@ For the parameters to XGBoost
 XGBoost is a thin wrapper around a C++ library, so most memory is allocated off-heap. We need to clean it up manually by calling =dispose=. If we do not, the GC will erroneously believe that the allocated models are very small, when they could actually be multiple megabytes in size. This causes the GC to abstain from collecting them, and the server will eventually run out of memory.
 
 #+BEGIN_SRC clojure
-(defn- dispose
+(defn dispose
   "Fees the memory allocated to given model."
   [model]
   (locking model
     (.dispose model)))
-
-(defmethod model/dispose :xgboost
-  [_ model]
-  (dispose model))
 #+END_SRC
 
 * Predict
@@ -141,7 +132,7 @@ arrays when it creates them.
   [vec]
   (DMatrix. (.iterator [(->LabeledPoint vec)]) nil))
 
-(defn- predict
+(defn predict
   [model _seleted-features hyperparameters feature-vector]
   (let [booster (:booster hyperparameters)
         num-trees (:num-rounds hyperparameters)
@@ -160,10 +151,6 @@ arrays when it creates them.
            (.predict model dmatrix false num-trees)
            (.predict model dmatrix))))
      (ffirst))))
-
-(defmethod model/predict :xgboost
-  [_ _predictor-type model seleted-features hyperparameters feature-vector]
-  (predict model seleted-features hyperparameters feature-vector))
 #+END_SRC
 
 * Hyperparameters optimization
@@ -213,17 +200,17 @@ using standard XGBoost methods.
 
 #+NAME: model management
 #+BEGIN_SRC clojure
-(defmethod model/save :xgboost
-  [_ model filepath]
+(defn save
+  [model filepath]
   (.saveModel model filepath)
   [filepath])
 
-(defmethod model/load :xgboost
-  [_ filepath]
+(defn load
+  [filepath]
   (XGBoost/loadModel filepath))
 
-(defmethod model/load-from-bytes :xgboost
-  [_ bytes]
+(defn load-from-bytes
+  [bytes]
   (with-open [input (io/input-stream bytes)]
     (XGBoost/loadModel input)))
 #+END_SRC

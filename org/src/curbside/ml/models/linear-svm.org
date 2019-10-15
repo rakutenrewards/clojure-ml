@@ -1,4 +1,4 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/algorithms/linear_svm.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/models/linear_svm.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
 #+OPTIONS: toc:2
 
 #+TITLE: Linear SVM Models
@@ -19,11 +19,10 @@ The linear SVM classifier is geared to handle large-scale linear classification 
 ** Namespace Definition
 
 #+BEGIN_SRC clojure
-(ns curbside.ml.algorithms.linear-svm
+(ns curbside.ml.models.linear-svm
   (:refer-clojure :exclude [load])
   (:require
    [clojure.java.io :as io]
-   [curbside.ml.model :as model]
    [curbside.ml.training-sets.conversion :as conversion])
   (:import
    (java.io File)
@@ -96,17 +95,17 @@ The two keys are the classes' labels. Then the weight modifier for each of these
                    (into-array Integer/TYPE (keys weights))))
     parameters))
 
-(defmethod model/train :lsvm
-  [_ _predictor-type trainin-set-csv-path hyperparameters]
-  (Linear/train (problem trainin-set-csv-path) (parameters hyperparameters)))
+(defn train
+  [training-set-csv-path hyperparameters]
+  (Linear/train (problem training-set-csv-path) (parameters hyperparameters)))
 #+END_SRC
 
 * Save
 
 #+NAME: save model
 #+BEGIN_SRC clojure
-(defmethod model/save :lsvm
-  [_ model filepath]
+(defn save
+  [model filepath]
   (with-open [out-file (io/writer filepath)]
     (Linear/saveModel out-file ^Model model)
     [filepath]))
@@ -116,14 +115,9 @@ The two keys are the classes' labels. Then the weight modifier for each of these
 
 #+NAME: load model
 #+BEGIN_SRC clojure
-(defmethod model/load :lsvm
-  [_ filepath]
-  (with-open [reader (io/reader filepath)]
-    (Linear/loadModel reader)))
-
-(defmethod model/load-from-bytes :lsvm
-  [_ bytes]
-  (with-open [reader (io/reader bytes)]
+(defn load
+  [filepath-or-bytes]
+  (with-open [reader (io/reader filepath-or-bytes)]
     (Linear/loadModel reader)))
 #+END_SRC
 
@@ -141,9 +135,10 @@ The two keys are the classes' labels. Then the weight modifier for each of these
                        value)]
     (new FeatureNode (inc index) value)))
 
-(defmethod model/predict :lsvm
-  [_ _predictor-type model _selected-features _hyperparameters feature-vector]
-  (Linear/predict model (->> feature-vector
-                             (keep-indexed create-feature-node)
-                             into-array)))
+(defn predict
+  [model feature-vector]
+  (Linear/predict model
+                  (->> feature-vector
+                       (keep-indexed create-feature-node)
+                       into-array)))
 #+END_SRC
