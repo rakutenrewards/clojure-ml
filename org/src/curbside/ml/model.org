@@ -56,7 +56,7 @@ We will define multimethods for all of these operations. These multimethods will
     algorithm))
 
 (defmulti train
-  (fn [algorithm training-set predictor-type hyperparameters]
+  (fn [algorithm predictor-type training-set-path hyperparameters]
     algorithm))
 
 (defmulti predict
@@ -151,13 +151,13 @@ We will define multimethods for all of these operations. These multimethods will
   training set CSV file as input and the number of `k-folds` to use for the
   cross validation. If `multithreads` is `true`, then each fold will be
   processed on its own thread in parallel."
-  [algorithm predictor-type selected-features hyperparameters training-set-file
+  [algorithm predictor-type selected-features hyperparameters training-set-path
    & {:keys [k-folds multithreads scaling-factors feature-scaling-fns label-scaling-fns]}]
   {:pre [(some #{:classification :regression} #{predictor-type})]}
   (let [k-folds (or k-folds 10)
         mode (or predictor-type :classification)
         multithreads (or multithreads false)
-        [header & training-set] (with-open [in-file (io/reader training-set-file)]
+        [header & training-set] (with-open [in-file (io/reader training-set-path)]
                                    (doall
                                     (csv/read-csv in-file)))
         folds (partition-all (/ (count training-set) k-folds) (shuffle training-set))
@@ -206,16 +206,16 @@ We will define multimethods for all of these operations. These multimethods will
 
 (defn evaluate
   "Only cross-validate method is supported at the moment."
-  [algorithm predictor-type selected-features hyperparameters training-set-file
+  [algorithm predictor-type selected-features hyperparameters training-set-path
    & {:keys [_k-folds _multithreads _scaling-factors _feature-scaling-fns _label-scaling-fns] :as options}]
-  (cross-validate algorithm predictor-type selected-features hyperparameters training-set-file hyperparameters options))
+  (cross-validate algorithm predictor-type selected-features hyperparameters training-set-path hyperparameters options))
 #+END_SRC
 
 * Hyperparameters optimization
 
 #+BEGIN_SRC clojure
 (defn- grid-search
-  [algorithm predictor-type selected-features grid-parameters training-set-file
+  [algorithm predictor-type selected-features grid-parameters training-set-path
    & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
   (let [selection-metric (or selection-metric :roc-auc)
         k-folds (or k-folds 2)
@@ -230,7 +230,7 @@ We will define multimethods for all of these operations. These multimethods will
                                       predictor-type
                                       selected-features
                                       hyperparameters
-                                      training-set-file
+                                      training-set-path
                                       :scaling-factors scaling-factors
                                       :k-folds k-folds
                                       :feature-scaling-fns feature-scaling-fns
@@ -250,9 +250,9 @@ We will define multimethods for all of these operations. These multimethods will
 
 (defn optimize-hyperparameters
   "Only grid-search method is supported at the moment."
-  [algorithm predictor-type selected-features grid-parameters training-set-file
+  [algorithm predictor-type selected-features grid-parameters training-set-path
    & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
-  (grid-search algorithm predictor-type selected-features grid-parameters training-set-file
+  (grid-search algorithm predictor-type selected-features grid-parameters training-set-path
                :selection-metric selection-metric
                :k-folds k-folds
                :threads-pool threads-pool

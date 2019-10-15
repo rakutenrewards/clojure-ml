@@ -120,33 +120,33 @@ The decision tree models namespace includes all the function that manage the cre
        Utils/splitOptions))
 
 (defn- parameters
-  "Define all the parameters required by a Decision Tree trainer. Returns the
-  serialized parameters."
-  [params]
-  (serialize-options (merge default-params params)))
+  "Define all the hyperparameters required by a Decision Tree trainer. Returns the
+  serialized hyperparameters."
+  [hyperparameters]
+  (serialize-options (merge default-params hyperparameters)))
 
 (defn- train
-  "Train a Decision Tree model for a given problem with specified parameters"
-  [algorithm predictor-type prob params]
+  "Train a Decision Tree model for a given training set csv with specified hyperparameters"
+  [algorithm predictor-type training-set-csv hyperparameters]
   (let [tree (case algorithm
                :c4.5 (J48.)
                :m5p (M5P.)
                :random-forest (RandomForest.))]
-    (.setOptions tree (parameters params))
-    (.buildClassifier tree (conversion/csv-to-arff prob predictor-type))
+    (.setOptions tree (parameters hyperparameters))
+    (.buildClassifier tree (conversion/csv-to-arff training-set-csv predictor-type))
     tree))
 
 (defmethod model/train :c4.5
-  [algorithm predictor-type prob params]
-  (train algorithm predictor-type prob params))
+  [algorithm predictor-type training-set hyperparameters]
+  (train algorithm predictor-type training-set hyperparameters))
 
 (defmethod model/train :m5p
-  [algorithm predictor-type prob params]
-  (train algorithm predictor-type prob params))
+  [algorithm predictor-type training-set hyperparameters]
+  (train algorithm predictor-type training-set hyperparameters))
 
 (defmethod model/train :random-forest
-  [algorithm predictor-type prob params]
-  (train algorithm predictor-type prob params))
+  [algorithm predictor-type training-set hyperparameters]
+  (train algorithm predictor-type training-set hyperparameters))
 #+END_SRC
 
 * Save Models
