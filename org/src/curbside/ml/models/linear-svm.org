@@ -6,8 +6,7 @@
 * Table of Contents                                             :toc:noexport:
 - [[#introduction][Introduction]]
   - [[#namespace-definition][Namespace Definition]]
-- [[#model-creation][Model Creation]]
-  - [[#create-model][Create Model]]
+- [[#train][Train]]
 - [[#save][Save]]
 - [[#load][Load]]
 - [[#predict][Predict]]
@@ -29,8 +28,7 @@ The linear SVM classifier is geared to handle large-scale linear classification 
    (de.bwaldvogel.liblinear Linear SolverType Problem Parameter Model FeatureNode)))
 #+END_SRC
 
-* Model Creation
-** Create Model
+* Train
 
 One important parameter of linear svm models is the =weights= that should be leveraged if the training set is unbalanced. An unbalanced training set is one where there are many more of one class than another one. In these cases, we have to weight the class that is unbalanced to rebalance the training set accordingly. This is useful for training classifier using unbalanced input data or with asymmetric misclassification cost.
 
@@ -57,7 +55,7 @@ The two keys are the classes' labels. Then the weight modifier for each of these
     (conversion/csv-to-libsvm training-set-csv-path temp-svm-path)
     file))
 
-(defn- problem
+(defn- training-set-path->problem
   "Define a problem space by reading a CSV training set."
   [training-set-csv-path]
   (-> training-set-csv-path
@@ -97,7 +95,8 @@ The two keys are the classes' labels. Then the weight modifier for each of these
 
 (defn train
   [training-set-csv-path hyperparameters]
-  (Linear/train (problem training-set-csv-path) (parameters hyperparameters)))
+  (Linear/train (training-set-path->problem training-set-csv-path)
+                (parameters hyperparameters)))
 #+END_SRC
 
 * Save

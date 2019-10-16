@@ -87,7 +87,7 @@ XGBoost is a thin wrapper around a C++ library, so most memory is allocated off-
 
 #+BEGIN_SRC clojure
 (defn dispose
-  "Fees the memory allocated to given model."
+  "Frees the memory allocated to given model."
   [model]
   (locking model
     (.dispose model)))
