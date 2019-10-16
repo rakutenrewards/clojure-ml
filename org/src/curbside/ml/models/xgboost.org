@@ -24,6 +24,7 @@ This document defines a simple Clojure interface to XGBoost, a library for gradi
   (:require
    [clojure.java.io :as io]
    [clojure.walk :as walk]
+   [curbside.ml.training-sets.conversion :as conversion]
    [curbside.ml.utils.parsing :as parsing])
   (:import
    (ml.dmlc.xgboost4j LabeledPoint)
@@ -35,13 +36,7 @@ This document defines a simple Clojure interface to XGBoost, a library for gradi
 To train, we just need to load the training set into a DMatrix, convert the
 parameters into a Java Map, and call the =train= method on =XGBoost=.
 
-For the parameters to XGBoost
-
 #+BEGIN_SRC clojure
-(defn- filepath->DMatrix
-  [filepath]
-  (DMatrix. filepath))
-
 (defn- get-non-nil-values-indices
   "Get a vector of non-nil indices from a vector `v`"
   [vec]
@@ -67,25 +62,19 @@ For the parameters to XGBoost
         (keep parsing/parse-float)
         float-array)))
 
-(defn- coll->DMatrix
-  [coll]
-  (DMatrix. (.iterator (map ->LabeledPoint coll)) nil))
-
-(defn- training-set->DMatrix
-  [filepath-or-coll]
-  (if (string? filepath-or-coll)
-    (filepath->DMatrix filepath-or-coll)
-    (coll->DMatrix filepath-or-coll)))
-
-(defn- params->map
-  [params]
-  (walk/stringify-keys params))
+(defn- filepath->DMatrix
+  [filepath]
+  (let [columns-keys (conversion/csv-column-keys filepath)
+        vectors (->> filepath
+                     (conversion/csv-to-maps)
+                     (map #(->LabeledPoint ((apply juxt columns-keys) %))))]
+    (DMatrix. (.iterator vectors) nil)))
 
 (defn train
   [training-set-path params]
   (XGBoost/train
-   (training-set->DMatrix training-set-path)
-   (params->map params)
+   (filepath->DMatrix training-set-path)
+   (walk/stringify-keys params)
    (int (or (:num-rounds params) 10))
    {}
    (:obj-fn params)
@@ -207,7 +196,7 @@ using standard XGBoost methods.
 
 (defn load
   [filepath]
-  (XGBoost/loadModel filepath))
+  (XGBoost/loadModel ^String filepath))
 
 (defn load-from-bytes
   [bytes]
