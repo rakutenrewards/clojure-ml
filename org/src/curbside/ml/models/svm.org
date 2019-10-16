@@ -40,76 +40,35 @@ Once the model is scaled we can train a model that will be used to make predicti
 
 #+NAME: svm training
 #+BEGIN_SRC clojure :results silent
-(defn load-svm
-  "Parses a .svm file into an svm_problem."
-  [training]
-  (with-open [in-file (io/reader training)]
-    (let [labels-features
-          (mapv
-           (fn [l]
-             (let [space-split (str/split l #" ")
-                   label (parsing/parse-double (first space-split))
-                   features (->> (rest space-split)
-                                 (map #(str/split % #":"))
-                                 (map (fn [[i v]]
-                                        (let [node (new svm_node)]
-                                          (set! (. node index)
-                                            (Integer/parseInt i))
-                                          (set! (. node value)
-                                            (parsing/parse-double v))
-                                          node)))
-                                 into-array)]
-               [label features]))
-           (line-seq in-file))]
-      [(double-array (map first labels-features))
-       (into-array (map second labels-features))])))
-
-(defn- problem
+(defn- training-set-path->problem
   "Define a problem space by reading a CSV training set. If training is a CSV
   file then the problem will be read from that file. If training is a sequence
   that define the problem, then the problem will be created from that sequence."
-  [training]
-  (if (and (string? training) (.exists (io/as-file training))
-           (str/ends-with? training ".svm"))
-    (let [[labels features] (load-svm training)
-          problem (new svm_problem)]
-      (set! (.l problem) (count labels))
-      (set! (.y problem) labels)
-      (set! (.x problem) features)
-      problem)
-    (let [training (cond
-                     (and (string? training) (.exists (io/as-file training)))
-                     (rest
-                      (with-open [in-file (io/reader training)]
-                        (doall
-                          (csv/read-csv in-file))))
-
-                     (string? training)
-                     (throw (Exception. (str "File doesn't exist: " training)))
-
-                     (sequential? training)
-                     training
-
-                     :else
-                     (throw (Exception. "unknown type for training input")))
-          problem (new svm_problem)]
-      (set! (.l problem) (count training))
-      (set! (.y problem) (double-array (->> training
-                                            (mapv (fn [[label & _features]]
-                                                    (parsing/parse-double label))))))
-      (set! (.x problem) (into-array
-                          (->> training
-                               (map (fn [[_label & features]]
-                                      (into-array
-                                       (sort-by #(.index %)
-                                                (->> features
-                                                     (keep-indexed (fn [index feature]
-                                                                     (when-let [feature (parsing/parse-double feature)]
-                                                                       (let [node (new svm_node)]
-                                                                         (set! (. node index) (inc index))
-                                                                         (set! (. node value) feature)
-                                                                         node))))))))))))
-      problem)))
+  [training-set-path]
+  (let [training-set (if (and (string? training-set-path)
+                              (.exists (io/as-file training-set-path)))
+                       (rest
+                        (with-open [in-file (io/reader training-set-path)]
+                          (doall (csv/read-csv in-file))))
+                       (throw (Exception. (str "File doesn't exist: " training-set-path))))
+        problem (new svm_problem)]
+    (set! (.l problem) (count training-set))
+    (set! (.y problem) (double-array (->> training-set
+                                          (mapv (fn [[label & _features]]
+                                                  (parsing/parse-double label))))))
+    (set! (.x problem) (into-array
+                        (->> training-set
+                             (map (fn [[_label & features]]
+                                    (into-array
+                                     (sort-by #(.index %)
+                                              (->> features
+                                                   (keep-indexed (fn [index feature]
+                                                                   (when-let [feature (parsing/parse-double feature)]
+                                                                     (let [node (new svm_node)]
+                                                                       (set! (. node index) (inc index))
+                                                                       (set! (. node value) feature)
+                                                                       node))))))))))))
+    problem))
 
 (def kernel-types
   {:linear svm_parameter/LINEAR
@@ -156,7 +115,7 @@ Once the model is scaled we can train a model that will be used to make predicti
 (defn train
   "Train a Linear SVM model for a given problem with specified parameters"
   [training-set-path hyperparameters]
-  (let [problem-obj (problem training-set-path)
+  (let [problem-obj (training-set-path->problem training-set-path)
         params-obj (format-hyperparameters hyperparameters)]
     (when-let [error (svm/svm_check_parameter problem-obj params-obj)]
       (throw (Exception. error)))
