@@ -359,7 +359,7 @@ We will define multimethods for all of these operations. These multimethods will
 
 #+BEGIN_SRC clojure
 (defn- grid-search
-  [algorithm predictor-type selected-features grid-parameters training-set-path
+  [algorithm predictor-type selected-features hyperparameters grid-parameters training-set-path
    & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
   (let [selection-metric (or selection-metric :roc-auc)
         k-folds (or k-folds 2)
@@ -369,17 +369,17 @@ We will define multimethods for all of these operations. These multimethods will
                     (map #(into {} (map (fn [x y] [x y])
                                         params-keys
                                         %))))
-        eval (fn [hyperparameters]
+        eval (fn [hyperparameters-to-optimize]
                (let [result (evaluate algorithm
                                       predictor-type
                                       selected-features
-                                      hyperparameters
+                                      (merge hyperparameters hyperparameters-to-optimize)
                                       training-set-path
                                       :scaling-factors scaling-factors
                                       :k-folds k-folds
                                       :feature-scaling-fns feature-scaling-fns
                                       :label-scaling-fns label-scaling-fns)]
-                 {:optimal-params hyperparameters
+                 {:optimal-params hyperparameters-to-optimize
                   :selected-evaluation (get result selection-metric)
                   :model-evaluations result}))
         find-best (if (= (metrics/comparator selection-metric) <)
@@ -394,9 +394,14 @@ We will define multimethods for all of these operations. These multimethods will
 
 (defn optimize-hyperparameters
   "Only grid-search method is supported at the moment."
-  [algorithm predictor-type selected-features grid-parameters training-set-path
+  [algorithm predictor-type selected-features hyperparameters grid-parameters training-set-path
    & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
-  (grid-search algorithm predictor-type selected-features grid-parameters training-set-path
+  (grid-search algorithm
+               predictor-type
+               selected-features
+               hyperparameters
+               grid-parameters
+               training-set-path
                :selection-metric selection-metric
                :k-folds k-folds
                :threads-pool threads-pool

@@ -29,6 +29,8 @@ This document defines a simple Clojure interface to XGBoost, a library for gradi
   (:import
    (ml.dmlc.xgboost4j LabeledPoint)
    (ml.dmlc.xgboost4j.java Booster DMatrix XGBoost XGBoostError)))
+
+(def default-num-rounds 10)
 #+END_SRC
 
 * Train
@@ -71,14 +73,14 @@ parameters into a Java Map, and call the =train= method on =XGBoost=.
     (DMatrix. (.iterator vectors) nil)))
 
 (defn train
-  [training-set-path params]
+  [training-set-path hyperparameters]
   (XGBoost/train
    (filepath->DMatrix training-set-path)
-   (walk/stringify-keys params)
-   (int (or (:num-rounds params) 10))
+   (walk/stringify-keys hyperparameters)
+   (int (or (:num-rounds hyperparameters) default-num-rounds))
    {}
-   (:obj-fn params)
-   (:eval-fn params)))
+   (:obj-fn hyperparameters)
+   (:eval-fn hyperparameters)))
 #+END_SRC
 
 * Dispose
@@ -98,14 +100,6 @@ XGBoost is a thin wrapper around a C++ library, so most memory is allocated off-
 The XGBoost library uses its own matrix data type, called DMatrix. We define
 some functions to convert data to/from DMatrices.
 
-Note that there is some strange behavior in the XGBoost library that depends on
-how a DMatrix was constructed. If we use the DMatrix constructor that creates a
-DMatrix from a path to a libsvm training set file, the model that results from
-training on that DMatrix will expect one extra input at the front of its input
-array, which the model ignores. Currently, our training pipeline uses that
-constructor, so our predict function adds the extra input to the front of the
-arrays when it creates them.
-
 #+BEGIN_SRC clojure
 (defn- get-xgboost-handle
   "Gets the internal handle field that points to the underlying C++ Booster
@@ -124,10 +118,10 @@ arrays when it creates them.
 (defn predict
   [model _seleted-features hyperparameters feature-vector]
   (let [booster (:booster hyperparameters)
-        num-trees (:num-rounds hyperparameters)
+        num-trees (int (or (:num-rounds hyperparameters) default-num-rounds))
         ;; Pad to add a dummy label at the front of the vector.
         ;; It will be ignored when doing prediction
-        dmatrix (->predict-DMatrix (into [1.0 2.0] feature-vector))]
+        dmatrix (->predict-DMatrix (into [1.0] feature-vector))]
     (->
      ;; lock for mutual exclusion w.r.t. dispose.
      (locking model
