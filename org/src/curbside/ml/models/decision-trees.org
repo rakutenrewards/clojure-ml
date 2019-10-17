@@ -28,6 +28,7 @@ The decision tree models namespace includes all the function that manage the cre
   (:refer-clojure :exclude [load])
   (:require
    [clojure.java.io :as io]
+   [clojure.spec.alpha :as s]
    [clojure.string :as str]
    [curbside.ml.training-sets.conversion :as conversion]
    [curbside.ml.utils.weka :as weka])
@@ -63,6 +64,34 @@ The decision tree models namespace includes all the function that manage the cre
 | =q=                              | Seed for random data shuffling                                                 | =integer=  | =[1, ...]=      |       1 |
 | =doNotMakeSplitPointActualValue= | Do not make split point actual value                                           | =boolean=  | =[true, false]= |         |
 
+#+BEGIN_SRC clojure
+(s/def ::u boolean?)
+(s/def ::o boolean?)
+(s/def ::c (s/double-in :infinite? false :NaN? false))
+(s/def ::m integer?)
+(s/def ::r boolean?)
+(s/def ::n integer?)
+(s/def ::b boolean?)
+(s/def ::s boolean?)
+(s/def ::l boolean?)
+(s/def ::a boolean?)
+(s/def ::j boolean?)
+(s/def ::q integer?)
+
+(s/def ::c45-hyperparameters (s/keys :opt-un [::u
+                                              ::o
+                                              ::c
+                                              ::m
+                                              ::r
+                                              ::n
+                                              ::b
+                                              ::s
+                                              ::l
+                                              ::a
+                                              ::j
+                                              ::q]))
+#+END_SRC
+
 ** M5P
 
 | hyper-parameter | description                                                          | value type | possible values | default |
@@ -73,28 +102,47 @@ The decision tree models namespace includes all the function that manage the cre
 | =m=             | Set minimum number of instances per leaf                             | =integer=  | =[1, ...]=      |       4 |
 | =l=             | Save instances at the nodes in the tree (for visualization purposes) | =boolean=  | =[true, false]= |         |
 
+#+BEGIN_SRC clojure
+(s/def ::m5p-hyperparameters (s/keys :opt-un [::u
+                                              ::o
+                                              ::c
+                                              ::m
+                                              ::r]))
+#+END_SRC
+
+
 ** Random Forest
 
-| hyper-parameter                           | description                                                                                         | value type | possible values | default |
-|-------------------------------------------+-----------------------------------------------------------------------------------------------------+------------+-----------------+---------|
-| =P=                                       | Size of each bag, as a percentage of the training set size.                                         | =integer=  | =[1, ...]=      |     100 |
-| =O=                                       | Calculate the out of bag error.                                                                     | =boolean=  | =[true, false]= |         |
-| =store-out-of-bag-predictions=            | Whether to store out of bag predictions in internal evaluation object.                              | =boolean=  | =[true, false]= |         |
-| =output-out-of-bag-complexity-statistics= | Whether to output complexity-based statistics when out-of-bag evaluation is performed.              | =boolean=  | =[true, false]= |         |
-| =attribute-importance=                    | Compute and output attribute importance (mean impurity decrease method)                             | =boolean=  | =[true, false]= |         |
-| =I=                                       | Number of iterations.                                                                               | =integer=  | =[1, ...]=      |     100 |
-| =num-slots=                               | Number of execution slots. (default 1 - i.e. no parallelism) (use 0 to auto-detect number of cores) | =integer=  | =[0, ...]=      |       1 |
-| =K=                                       | Number of attributes to randomly investigate. (<1 = int(log_2(#predictors)+1))                      | =integer=  | =[0, ...]=      |       0 |
-| =M=                                       | Set minimum number of instances per leaf.                                                           | =integer=  | =[1, ...]=      |       1 |
-| =V=                                       | Set minimum numeric class variance proportion of train variance for split.                          | =double=   | =[0.0, ...]=    |    1e-3 |
-| =S=                                       | Seed for random number generator.                                                                   | =integer=  | =[1, ...]=      |       1 |
-| =depth=                                   | The maximum depth of the tree, 0 for unlimited.                                                     | =integer=  | =[0, ...]=      |       0 |
-| =N=                                       | Number of folds for backfitting (default 0, no backfitting).                                        | =integer=  | =[1, ...]=      |       0 |
-| =U=                                       | Allow unclassified instances.                                                                       | =boolean=  | =[true, false]= |         |
-| =B=                                       | Break ties randomly when several attributes look equally good.                                      | =boolean=  | =[true, false]= |         |
-| =do-not-check-capabilities=               | If set, classifier capabilities are not checked before classifier is built (use with caution).      | =boolean=  | =[true, false]= |         |
-| =num-decimal-places=                      | The number of decimal places for the output of numbers in the model.                                | =integer=  | =[1, ...]=      |       2 |
-| =batch-size=                              | The desired batch size for batch prediction.                                                        | =integer=  | =[1, ...]=      |     100 |
+   | hyper-parameter                           | description                                                                                         | value type | possible values | default |
+   |-------------------------------------------+-----------------------------------------------------------------------------------------------------+------------+-----------------+---------|
+   | =P=                                       | Size of each bag, as a percentage of the training set size.                                         | =integer=  | =[1, ...]=      |     100 |
+   | =O=                                       | Calculate the out of bag error.                                                                     | =boolean=  | =[true, false]= |         |
+   | =store-out-of-bag-predictions=            | Whether to store out of bag predictions in internal evaluation object.                              | =boolean=  | =[true, false]= |         |
+   | =output-out-of-bag-complexity-statistics= | Whether to output complexity-based statistics when out-of-bag evaluation is performed.              | =boolean=  | =[true, false]= |         |
+   | =attribute-importance=                    | Compute and output attribute importance (mean impurity decrease method)                             | =boolean=  | =[true, false]= |         |
+   | =I=                                       | Number of iterations.                                                                               | =integer=  | =[1, ...]=      |     100 |
+   | =num-slots=                               | Number of execution slots. (default 1 - i.e. no parallelism) (use 0 to auto-detect number of cores) | =integer=  | =[0, ...]=      |       1 |
+   | =K=                                       | Number of attributes to randomly investigate. (<1 = int(log_2(#predictors)+1))                      | =integer=  | =[0, ...]=      |       0 |
+   | =M=                                       | Set minimum number of instances per leaf.                                                           | =integer=  | =[1, ...]=      |       1 |
+   | =V=                                       | Set minimum numeric class variance proportion of train variance for split.                          | =double=   | =[0.0, ...]=    |    1e-3 |
+   | =S=                                       | Seed for random number generator.                                                                   | =integer=  | =[1, ...]=      |       1 |
+   | =depth=                                   | The maximum depth of the tree, 0 for unlimited.                                                     | =integer=  | =[0, ...]=      |       0 |
+   | =N=                                       | Number of folds for backfitting (default 0, no backfitting).                                        | =integer=  | =[1, ...]=      |       0 |
+   | =U=                                       | Allow unclassified instances.                                                                       | =boolean=  | =[true, false]= |         |
+   | =B=                                       | Break ties randomly when several attributes look equally good.                                      | =boolean=  | =[true, false]= |         |
+   | =do-not-check-capabilities=               | If set, classifier capabilities are not checked before classifier is built (use with caution).      | =boolean=  | =[true, false]= |         |
+   | =num-decimal-places=                      | The number of decimal places for the output of numbers in the model.                                | =integer=  | =[1, ...]=      |       2 |
+   | =batch-size=                              | The desired batch size for batch prediction.                                                        | =integer=  | =[1, ...]=      |     100 |
+
+#+BEGIN_SRC clojure
+(s/def ::k integer?)
+(s/def ::i integer?)
+(s/def ::depth integer?)
+
+(s/def ::rf-hyperparameters (s/keys :opt-un [::k
+                                             ::i
+                                             ::depth]))
+#+END_SRC
 
 * Train
 
