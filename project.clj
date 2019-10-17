@@ -1,6 +1,6 @@
 (defproject com.curbside/curbside-clojure-ml "0.2.2"
   :description "Library for ML model training and serving."
-  :url "http://github.com/Curbside/curbside-clojure-ml"
+  :url "http://github.com/RakutenReady/curbside-clojure-ml"
   :dependencies [[org.clojure/clojure "1.10.1"]
                  [org.clojure/data.csv "0.1.4"]
                  [clj-time "0.15.2"]
