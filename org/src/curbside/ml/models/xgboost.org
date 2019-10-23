@@ -23,6 +23,7 @@ This document defines a simple Clojure interface to XGBoost, a library for gradi
   (:refer-clojure :exclude [load])
   (:require
    [clojure.java.io :as io]
+   [clojure.spec.alpha :as s]
    [clojure.walk :as walk]
    [curbside.ml.training-sets.conversion :as conversion]
    [curbside.ml.utils.parsing :as parsing])
@@ -175,6 +176,102 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
 | =tweedie_variance_power= | Param for objective=reg:tweedie                       | =decimal=  | =[0.0,...,1.0]=                               |                        1.5 |
 | =updater=                | Comma-separated string of tree updaters.              | =string=   | See official docs.                            |        grow_colmaker,prune |
 | =updater=                | Algorithm for gblinear booster.                       | =string=   | =[shotgun, coord_descent]=                    |                    shotgun |
+
+#+BEGIN_SRC clojure
+(s/def ::booster #{"gbtree" "gblinear" "dart"})
+(s/def ::silent (s/int-in 0 2))
+(s/def ::nthread integer?)
+(s/def ::eta (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::gamma (s/double-in :infinite? false :NaN? false))
+(s/def ::max_depth integer?)
+(s/def ::min_child_weight (s/double-in :infinite? false :NaN? false))
+(s/def ::max_delta_step (s/double-in :infinite? false :NaN? false))
+(s/def ::subsample (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::colsample_bytree (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::colsample_bylevel (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::lambda (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::alpha (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::tree_method #{"auto" "exact" "approx" "hist" "gpu_exact" "gpu_hist"})
+(s/def ::sketch_eps (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::scale_pos_weight (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::updater
+  #{"grow_colmaker"
+    "distcol"
+    "grow_histmaker"
+    "grow_local_histmaker"
+    "grow_skmaker"
+    "sync"
+    "refresh"
+    "prune"})
+(s/def ::refresh_leaf (s/int-in 0 2))
+(s/def ::process_type #{"default" "update"})
+(s/def ::grow_policy #{"depthwise" "lossguide"})
+(s/def ::max_leaves integer?)
+(s/def ::max_bin integer?)
+(s/def ::predictor #{"cpu_predictor" "gpu_predictor"})
+(s/def ::sample_type #{"uniform" "weighted"})
+(s/def ::normalize_type #{"tree" "forest"})
+(s/def ::rate_drop (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::one_drop (s/int-in 0 2))
+(s/def ::skip_drop (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::updater #{"shotgun" "coord_descent"})
+(s/def ::tweedie_variance_power (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::objective #{"reg:linear"
+                     "reg:logistic"
+                     "binary:logistic"
+                     "binary:logitraw"
+                     "binary:hinge"
+                     "gpu:reg:linear"
+                     "gpu:reg:logistic"
+                     "gpu:binary:logistic"
+                     "gpu:binary:logitraw"
+                     "count:poisson"
+                     "survival:cox"
+                     "multi:softmax"
+                     "multi:softprob"
+                     "rank:pairwise"
+                     "reg:gamma"
+                     "reg:tweedie"})
+(s/def ::base_score (s/double-in :infinite? false :NaN? false))
+(s/def ::seed integer?)
+(s/def ::num-rounds integer?)
+
+(s/def ::hyperparameters
+  (s/keys :req-un [::num-rounds]
+          :opt-un [::booster
+                   ::silent
+                   ::nthread
+                   ::eta
+                   ::gamma
+                   ::max_depth
+                   ::min_child_weight
+                   ::max_delta_step
+                   ::subsample
+                   ::colsample_bytree
+                   ::colsample_bylevel
+                   ::lambda
+                   ::alpha
+                   ::tree_method
+                   ::sketch_eps
+                   ::scale_pos_weight
+                   ::updater
+                   ::refresh_leaf
+                   ::process_type
+                   ::grow_policy
+                   ::max_leaves
+                   ::max_bin
+                   ::predictor
+                   ::sample_type
+                   ::normalize_type
+                   ::rate_drop
+                   ::one_drop
+                   ::skip_drop
+                   ::updater
+                   ::tweedie_variance_power
+                   ::objective
+                   ::base_score
+                   ::seed]))
+#+END_SRC
 
 * Save and load
 

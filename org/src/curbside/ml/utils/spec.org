@@ -1,0 +1,29 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/utils/spec.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: Spec Utilities
+
+* Table of Contents                                             :toc:noexport:
+- [[#namespace-definition][Namespace definition]]
+- [[#check][Check]]
+
+* Namespace definition
+
+#+BEGIN_SRC clojure
+(ns curbside.ml.utils.spec
+  (:require
+   [clojure.spec.alpha :as spec]
+   [expound.alpha :as expound]))
+#+END_SRC
+
+* Check
+
+#+BEGIN_SRC clojure
+(defn check
+  "Returns true if provided data matches spec, throws an
+  IllegalArgumentException otherwise."
+  [spec data]
+  (if (spec/valid? spec data)
+    true
+    (throw (IllegalArgumentException. (expound/expound-str type data)))))
+#+END_SRC

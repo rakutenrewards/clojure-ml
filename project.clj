@@ -1,4 +1,4 @@
-(defproject com.curbside/curbside-clojure-ml "1.0.1-SNAPSHOT"
+(defproject com.curbside/curbside-clojure-ml "1.1.0-SNAPSHOT"
   :description "Library for ML model training and serving."
   :url "http://github.com/RakutenReady/curbside-clojure-ml"
   :dependencies [[org.clojure/clojure "1.10.1"]
@@ -7,6 +7,9 @@
                  [medley "1.2.0"]
                  [org.clojure/math.combinatorics "0.1.6"]
                  [com.climate/claypoole "1.1.4"]
+
+                 ;; Spec helper
+                 [expound "0.7.2"]
 
                  ;; weka ML
                  [nz.ac.waikato.cms.weka/weka-dev "3.9.3"]
@@ -37,6 +40,10 @@
 
   :deploy-repositories [["releases"
                          {:url "https://curbside.jfrog.io/curbside/libs-release-local/"
+                          :username :env/artifactory_user
+                          :password :env/artifactory_pass}]
+                        ["snapshots"
+                         {:url "https://curbside.jfrog.io/curbside/libs-snapshot-local/"
                           :username :env/artifactory_user
                           :password :env/artifactory_pass}]]
 
