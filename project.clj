@@ -25,7 +25,9 @@
                  [ml.dmlc/xgboost4j "0.90"]]
 
   :profiles {:uberjar {:aot :all}
-             :ci [{:plugins [[test2junit "1.3.3"]]}]}
+             :ci {:plugins [[test2junit "1.3.3"]]}
+             :test {:resource-paths ["test-resources"]}
+             :dev [:test]}
 
   :plugins [[com.gfredericks/how-to-ns "0.1.6"]
             [lein-ancient "0.6.15"]
