@@ -114,8 +114,8 @@ We will define multimethods for all of these operations. These multimethods will
   (xgboost/train training-set-path params))
 
 (defmethod predict :xgboost
-  [_ _predictor-type model seleted-features hyperparameters feature-vector]
-  (xgboost/predict model seleted-features hyperparameters feature-vector))
+  [_ _predictor-type model _seleted-features hyperparameters feature-vector]
+  (xgboost/predict model hyperparameters feature-vector))
 
 (defmethod dispose :xgboost
   [_ model]

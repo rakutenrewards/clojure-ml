@@ -84,7 +84,7 @@ The two keys are the classes' labels. Then the weight modifier for each of these
     (conversion/csv-to-libsvm training-set-csv-path temp-svm-path)
     file))
 
-(defn- training-set-path->problem
+(defn- problem
   "Define a problem space by reading a CSV training set."
   [training-set-csv-path]
   (-> training-set-csv-path
@@ -117,8 +117,7 @@ The two keys are the classes' labels. Then the weight modifier for each of these
 
 (defn train
   [training-set-csv-path hyperparameters]
-  (Linear/train (training-set-path->problem training-set-csv-path)
-                (parameters hyperparameters)))
+  (Linear/train (problem training-set-csv-path) (parameters hyperparameters)))
 #+END_SRC
 
 * Save

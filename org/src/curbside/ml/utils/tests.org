@@ -7,6 +7,8 @@
 - [[#introduction][Introduction]]
   - [[#namespace-definition][Namespace Definition]]
 - [[#file-utilities][File utilities]]
+- [[#training-set-utilities][Training set utilities]]
+- [[#numeric-equality][Numeric Equality]]
 
 * Introduction
 
@@ -17,6 +19,8 @@ This file contains utility functions for testing purposes.
 #+NAME: test-fixtures namespace
 #+BEGIN_SRC clojure
 (ns curbside.ml.utils.tests
+  (:require
+   [clojure.java.io :as io])
   (:import
    [java.io File]))
 #+END_SRC
@@ -24,13 +28,34 @@ This file contains utility functions for testing purposes.
 * File utilities
 
 #+BEGIN_SRC clojure
+(defn create-temp-path
+  [extension]
+  (let [file (doto (File/createTempFile "test_" extension)
+               (.deleteOnExit))]
+    (.getPath file)))
+
 (defn create-temp-csv-path
   ([]
-   (let [file (doto (File/createTempFile "test_" ".csv")
-                (.deleteOnExit))]
-     (.getPath file)))
+   (create-temp-path ".csv"))
   ([content]
    (let [path (create-temp-csv-path)]
      (spit path content)
      path)))
+#+END_SRC
+
+* Training set utilities
+
+Here, we load training sets from resources.
+
+#+BEGIN_SRC clojure
+(def dummy-regression-single-label-training-set-path
+  (io/resource "training-sets/dummy-regression-single-label.csv"))
+#+END_SRC
+
+* Numeric Equality
+
+#+BEGIN_SRC clojure
+(defn approx=
+  [x y tolerance]
+  (< (Math/abs (- x y)) tolerance))
 #+END_SRC

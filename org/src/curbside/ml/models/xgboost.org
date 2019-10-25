@@ -11,6 +11,10 @@
 - [[#predict][Predict]]
 - [[#hyperparameters-optimization][Hyperparameters optimization]]
 - [[#save-and-load][Save and load]]
+- [[#tests][Tests]]
+  - [[#namespace-definition-1][Namespace definition]]
+  - [[#training-tests][Training tests]]
+  - [[#save-and-load-tests][Save and load tests]]
 
 * Introduction
 
@@ -117,7 +121,7 @@ some functions to convert data to/from DMatrices.
   (DMatrix. (.iterator [(->LabeledPoint vec)]) nil))
 
 (defn predict
-  [model _seleted-features hyperparameters feature-vector]
+  [model hyperparameters feature-vector]
   (let [booster (:booster hyperparameters)
         num-trees (int (or (:num-rounds hyperparameters) default-num-rounds))
         ;; Pad to add a dummy label at the front of the vector.
@@ -178,22 +182,25 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
 | =updater=                | Algorithm for gblinear booster.                       | =string=   | =[shotgun, coord_descent]=                    |                    shotgun |
 
 #+BEGIN_SRC clojure
+(s/def ::double-between-zero-and-one (s/double-in :min 0.0 :max 1.0))
+(s/def ::positive-double (s/double-in :min 0.0 :infinite? false))
+
 (s/def ::booster #{"gbtree" "gblinear" "dart"})
 (s/def ::silent (s/int-in 0 2))
 (s/def ::nthread integer?)
-(s/def ::eta (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
-(s/def ::gamma (s/double-in :infinite? false :NaN? false))
+(s/def ::learning_rate ::double-between-zero-and-one)
+(s/def ::gamma ::positive-double)
+(s/def ::max_delta_step ::positive-double)
 (s/def ::max_depth integer?)
-(s/def ::min_child_weight (s/double-in :infinite? false :NaN? false))
-(s/def ::max_delta_step (s/double-in :infinite? false :NaN? false))
-(s/def ::subsample (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
-(s/def ::colsample_bytree (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
-(s/def ::colsample_bylevel (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
-(s/def ::lambda (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
-(s/def ::alpha (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::min_child_weight ::double-between-zero-and-one)
+(s/def ::subsample ::double-between-zero-and-one)
+(s/def ::colsample_bytree ::double-between-zero-and-one)
+(s/def ::colsample_bylevel ::double-between-zero-and-one)
+(s/def ::lambda ::double-between-zero-and-one)
+(s/def ::alpha ::double-between-zero-and-one)
 (s/def ::tree_method #{"auto" "exact" "approx" "hist" "gpu_exact" "gpu_hist"})
-(s/def ::sketch_eps (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
-(s/def ::scale_pos_weight (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::sketch_eps ::double-between-zero-and-one)
+(s/def ::scale_pos_weight ::double-between-zero-and-one)
 (s/def ::updater
   #{"grow_colmaker"
     "distcol"
@@ -211,11 +218,11 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
 (s/def ::predictor #{"cpu_predictor" "gpu_predictor"})
 (s/def ::sample_type #{"uniform" "weighted"})
 (s/def ::normalize_type #{"tree" "forest"})
-(s/def ::rate_drop (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::rate_drop ::double-between-zero-and-one)
 (s/def ::one_drop (s/int-in 0 2))
-(s/def ::skip_drop (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::skip_drop ::double-between-zero-and-one)
 (s/def ::updater #{"shotgun" "coord_descent"})
-(s/def ::tweedie_variance_power (s/double-in :min 0.0 :max 1.0 :NaN? false :infinite? false))
+(s/def ::tweedie_variance_power ::double-between-zero-and-one)
 (s/def ::objective #{"reg:linear"
                      "reg:logistic"
                      "binary:logistic"
@@ -293,4 +300,46 @@ using standard XGBoost methods.
   [bytes]
   (with-open [input (io/input-stream bytes)]
     (XGBoost/loadModel input)))
+#+END_SRC
+
+* Tests
+
+** Namespace definition
+
+#+NAME: test-namespace
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/models/xgboost_test.clj
+(ns curbside.ml.models.xgboost-test
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [curbside.ml.models.xgboost :as xgboost]
+   [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.utils.tests :as tutils])
+  (:import
+   [java.util Arrays]))
+#+END_SRC
+
+** Training tests
+
+Here, the goal of the test is simply to see if we can train an xgboost model on a dataset and then do a prediction. To do so, we train on a dummy dataset where all the labels are the same.
+
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/models/xgboost_test.clj
+(deftest test-train-and-predict
+  (testing "given a dataset with a single label, when training, then the model always return a prediction close to this label."
+    (let [hyperparamters {:num-rounds 5 :booster "dart" :learning_rate 0.9}
+          model (xgboost/train tutils/dummy-regression-single-label-training-set-path hyperparamters)
+          prediction (xgboost/predict model hyperparamters [0 0])]
+      (is (tutils/approx= 0.0 prediction 1e-1)))))
+#+END_SRC
+
+** Save and load tests
+
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/models/xgboost_test.clj
+(deftest test-save-and-load-model
+  (testing "given a trained model, when saving and loading, then the loaded model is the model that was saved."
+    (let [hyperparamters {:booster "gbtree"}
+          model (xgboost/train tutils/dummy-regression-single-label-training-set-path hyperparamters)
+          model-path (tutils/create-temp-path ".xgb")]
+      (xgboost/save model model-path)
+      (is (Arrays/equals (.toByteArray model)
+                         (.toByteArray (xgboost/load model-path)))))))
 #+END_SRC
