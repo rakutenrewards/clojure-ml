@@ -1,0 +1,185 @@
+#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/training_sets/sampling.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
+#+OPTIONS: toc:2
+
+#+TITLE: Sampling Training Sets
+
+* Table of Contents                                            :toc:noexport:
+- [[#introduction][Introduction]]
+  - [[#namespace-definition][Namespace Definition]]
+- [[#training-set-sampling][Training Set Sampling]]
+  - [[#sampling-process][Sampling Process]]
+  - [[#sampling][Sampling]]
+- [[#tests][Tests]]
+  - [[#namespace-definition-1][Namespace definition]]
+  - [[#sampling-tests][Sampling tests]]
+
+* Introduction
+
+The model namespace includes all the functions related to training set sampling. It focus on the functionalities required by the =model= section of the overall machine learning process.
+
+** Namespace Definition
+
+#+BEGIN_SRC clojure
+(ns curbside.ml.training-sets.sampling
+  "The model namespace includes all the functions related to training set
+  sampling."
+  (:require
+   [curbside.ml.training-sets.conversion :as conversion])
+  (:import
+   (weka.filters Filter)))
+#+END_SRC
+
+* Training Set Sampling
+
+Sampling a training set is the action of changing a training set in a way that we change the distribution of the classes, or we normalize it by adding or removing instances of the training set.
+
+Sampling is a step that you will perform for classification tasks (not regression) normally to make sure that your training set are properly balanced.
+
+Unbalanced classes can create two problems:
+
+ 1. The accuracy (i.e. ratio of test samples for which we predicted the correct class) is no longer a good measure of the model performance
+ 2. The training process might arrive at a local optimum
+
+There are generally 5 methods to help coping with this situation:
+
+  1. Collect more data
+  2. Create copies of training samples
+  3. Create augmented copies of training samples
+  4. Remove training samples
+  5. Train for sensitivity and specificity
+
+With the training set sampling step, you will be able to experiment with the methods #2 using the Weka =Resample= class.
+
+** Sampling Process
+
+The sampling process should use training sets that can fit in memory. Because we want to reuse the =Resample= class of Weka to help us bootstrapping =curbside-prediction= and because we want to be able to use this sampling process for =SVM= and =Linear SVM= training sets (remember that they use a different training set file format), we have to perform  this training set conversion process:
+
+#+BEGIN_SRC plantuml :file ../imgs/training-set-sampling-process.png :exports results
+
+@startuml
+
+:Original Training Set;
+-> convert to ARFF;
+:ARFF Training Sets;
+-> Sampling;
+:Re-sampled ARFF Training Set;
+-> convert to CSV;
+:Re-sampled CSV Training Set;
+
+@enduml
+
+#+END_SRC
+
+#+RESULTS:
+[[file:../imgs/training-set-sampling-process.png]]
+
+** Sampling
+
+Once we have our training set in memory, we can use the =Resample= class to
+sample the training set according to the requirements specified by the
+training run's configuration. The specification is defined in [[file:../pipeline.org::*Sampling%20Training%20Sets][Sampling Training
+Sets]]'s specs.
+
+#+NAME: sampling training set
+#+BEGIN_SRC clojure
+(def default-sampling-config
+  {:without-replacement false
+   :bias-to-uniform-class 0.0
+   :sample-size-percent 100.0
+   :max-sample-size nil})
+
+(defn- sample-size-percent
+  [dataset-size {:keys [sample-size-percent max-sample-size]}]
+  (if max-sample-size
+    (let [max-sample-percent (if (zero? dataset-size)
+                               100.0
+                               (* 100 (/ (inc max-sample-size) dataset-size)))]
+      (min max-sample-percent sample-size-percent))
+    sample-size-percent))
+
+(defmulti build-sampler
+  (fn [training-set config predictor-type]
+    predictor-type))
+
+(defmethod build-sampler :regression
+  [training-set config _]
+  (let [sample-size (sample-size-percent (.numInstances training-set) config)]
+    (doto (weka.filters.unsupervised.instance.Resample.)
+      (.setNoReplacement (:without-replacement config))
+      (.setSampleSizePercent sample-size)
+      (.setInputFormat training-set))))
+
+(defmethod build-sampler :classification
+  [training-set config _]
+  (let [sample-size (sample-size-percent (.numInstances training-set) config)]
+    (doto (weka.filters.supervised.instance.Resample.)
+      (.setNoReplacement (:without-replacement config))
+      (.setSampleSizePercent sample-size)
+      (.setBiasToUniformClass (:bias-to-uniform-class config))
+      (.setInputFormat training-set))))
+
+(defn sampling-training-set
+  "Sample an input ARFF training set. The `label` column needs to be the first
+  of the CSV training set file."
+  [training-set-file sampled-training-set-file sampling-config predictor-type]
+  (let [sampling-config (merge default-sampling-config sampling-config)
+        training-set (conversion/csv-to-arff training-set-file predictor-type)
+        sampler (build-sampler training-set sampling-config predictor-type)]
+    (-> training-set
+        (Filter/useFilter sampler)
+        (conversion/arff-to-csv sampled-training-set-file))))
+#+END_SRC
+
+* Tests
+** Namespace definition
+
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/training_sets/sampling_test.clj
+(ns curbside.ml.training-sets.sampling-test
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [curbside.ml.training-sets.sampling :refer [sampling-training-set]]
+   [curbside.ml.utils.tests :as tutils]))
+#+END_SRC
+
+** Sampling tests
+
+Test sampling for both classification and regression datasets.
+
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/training_sets/sampling_test.clj
+(def empty-csv (tutils/create-temp-csv-path "label,a,b,c,d\n"))
+
+(defn test-sampling-training-set-sample-size
+  [predictor-type input]
+  (let [output (tutils/create-temp-csv-path)]
+    (testing "given the default config, when sampling, when it keeps all the data points"
+      (sampling-training-set input output {} predictor-type)
+      (is (= (tutils/count-csv-rows input)
+             (tutils/count-csv-rows output))))
+    (testing "given given a :max-sample-size config, when sampling, the right amount of points is sampled"
+      (sampling-training-set input output {:max-sample-size 1000} predictor-type)
+      (is (= 1000 (tutils/count-csv-rows output))))
+    (testing "given given a :sample-size-percent config, when sampling, the right amount of points is sampled"
+      (sampling-training-set input output {:sample-size-percent 25} predictor-type)
+      (is (= 25 (Math/round (float (* 100 (/ (tutils/count-csv-rows output)
+                                             (tutils/count-csv-rows input))))))))))
+
+(deftest test-sampling-training-set-classification
+  (test-sampling-training-set-sample-size
+   :classification
+   (tutils/resource-name-to-path-str "raw-data/en_route_piecompany_applepie2.csv")))
+
+(deftest test-sampling-training-set-regression
+  (test-sampling-training-set-sample-size
+   :regression
+   (tutils/resource-name-to-path-str "raw-data/eta_piecompany_applepie2.csv")))
+
+(deftest test-sampling-empty-dataset
+  (testing "given an empty dataset and a :max-sample-size config, when sampling, an empty dataset is produced"
+    (let [output-path (tutils/create-temp-csv-path)]
+      (sampling-training-set empty-csv output-path {:max-sample-size 1000} :regression)
+      (is (= 0 (tutils/count-csv-rows output-path)))))
+  (testing "given an empty dataset and a :sample-size-percent config, when sampling, an empty dataset is produced"
+    (let [output-path (tutils/create-temp-csv-path)]
+      (sampling-training-set empty-csv output-path {:sample-size-percent 55} :regression)
+      (is (= 0 (tutils/count-csv-rows output-path))))))
+#+END_SRC

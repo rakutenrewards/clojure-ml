@@ -248,7 +248,7 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
           :opt-un [::booster
                    ::silent
                    ::nthread
-                   ::eta
+                   ::learning_rate
                    ::gamma
                    ::max_depth
                    ::min_child_weight

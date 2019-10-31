@@ -20,6 +20,7 @@ This file contains utility functions for testing purposes.
 #+BEGIN_SRC clojure
 (ns curbside.ml.utils.tests
   (:require
+   [clojure.data.csv :as csv]
    [clojure.java.io :as io])
   (:import
    [java.io File]))
@@ -41,6 +42,15 @@ This file contains utility functions for testing purposes.
    (let [path (create-temp-csv-path)]
      (spit path content)
      path)))
+
+(defn count-csv-rows
+  [path]
+  (with-open [reader (io/reader path)]
+    (count (rest (csv/read-csv reader)))))
+
+(defn resource-name-to-path-str
+  [r]
+  (.getPath (io/resource r)))
 #+END_SRC
 
 * Training set utilities
