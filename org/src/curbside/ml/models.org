@@ -406,6 +406,29 @@ The supported hyperparameter search functions are the follwing:
                            (keys hyperparameter-search-space)
                            %)))))
 
+(defn- random-value
+  "Generate random values for the given set of parameter constraints which are
+   used for random search"
+  [constraints]
+  (let [type (:data-type constraints)
+        min (:min constraints)
+        max (:max constraints)
+        values (:values constraints)]
+    (case (type)
+      :integer (+ (rand-int (- max min)) min)
+      :decimal (+ (rand (- max min)) min)
+      :string (rand-nth values)))
+  )
+
+(defn random-search-combos
+  "Given the hyperparameter search space, generate a given number of random
+  combinations of parameters"
+  [random-iterations hyperparameter-search-space]
+  (repeatedly random-iterations
+              #(into {} (map (fn [[key value]] [key (random-value value)])
+              hyperparameter-search-space))))
+
+
 ;; TODO: spec hyperparam-search-space
 (defn optimize-hyperparameters
   "This function is responsible for training a model with the best
@@ -420,8 +443,10 @@ The supported hyperparameter search functions are the follwing:
         selection-metric (or selection-metric :roc-auc)
         k-folds (or k-folds 2)
         thread-count (or threads-pool 1)
+        random-iterations (:random-iterations hyperparameter-search-fn)
         combos (case (:type hyperparameter-search-fn)
-                 :grid (grid-search-combos hyperparameter-search-space))
+                 :grid (grid-search-combos hyperparameter-search-space)
+                 :random (random-search-combos random-iterations hyperparameter-search-space))
         eval (fn [hyperparameters-to-optimize]
                (let [result (evaluate algorithm
                                       predictor-type
