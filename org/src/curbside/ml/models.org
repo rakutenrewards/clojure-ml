@@ -432,7 +432,7 @@ The supported hyperparameter search functions are the follwing:
     ::random-search-data-string
     ::random-search-data-common))
 
-(s/def ::random-search-data-spec (s/multi-spec random-search-data :type))
+(s/def ::random-search-data-spec (s/multi-spec random-search-data-spec :type))
 
 ;; Algorithm specific hyperparameters
 
@@ -457,14 +457,14 @@ The supported hyperparameter search functions are the follwing:
   "Generate random values for the given set of parameter constraints which are
    used for random search"
   [constraints]
-  (let [type (:data-type constraints)
-        min (:min constraints)
-        max (:max constraints)
-        values (:values constraints)]
-    (case (type)
-      :integer (+ (rand-int (- max min)) min)
-      :decimal (+ (rand (- max min)) min)
-      :string (rand-nth values)))
+  (let [type (:type constraints)
+        min-value (:min constraints)
+        max-value (:max constraints)
+        string-values (:values constraints)]
+    (case type
+      :integer (+ (rand-int (- max-value min-value)) min-value)
+      :decimal (+ (rand (- max-value min-value)) min-value)
+      :string (rand-nth string-values)))
   )
 
 (defn random-search-combos
@@ -480,8 +480,8 @@ The supported hyperparameter search functions are the follwing:
 (defn optimize-hyperparameters
   "This function is responsible for training a model with the best
   hyperparameters found by the provided `hyperparameter-search-fn`."
-  [algorithm predictor-type selected-features hyperparameters hyperparameter-search-space training-set-path
-   & {:keys [hyperparameter-search-fn selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
+  [algorithm predictor-type selected-features hyperparameters hyperparameter-search-fn hyperparameter-search-space training-set-path
+   & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
   {:pre [(spec/check ::algorithm algorithm)
          (spec/check ::predictor-type predictor-type)
          (spec/check ::hyperparameters hyperparameters)
