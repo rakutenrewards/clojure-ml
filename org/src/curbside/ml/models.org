@@ -487,8 +487,11 @@ The supported hyperparameter search functions are the follwing:
          (spec/check ::hyperparameters hyperparameters)
          (spec/check (s/nilable ::hyperparameter-search-fn) hyperparameter-search-fn)
          (case (:type hyperparameter-search-space)
-           :random (map (fn [[k v]] (random-search-data-spec v)) hyperparameter-search-space)
-           )
+                    :random ((reduce #(and %1 %2)
+                                     (map (fn [[k v]]
+                                            (random-search-data-spec v))
+                                          hyperparameter-search-space)))
+                    )
          ]}
   (let [hyperparameter-search-fn (or hyperparameter-search-fn {:type :grid})
         selection-metric (or selection-metric :roc-auc)
