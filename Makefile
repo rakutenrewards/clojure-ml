@@ -1,7 +1,6 @@
 # tangled source
 SRC_DIR = src
 TEST_SRC_DIR = test
-EMACS      = /Applications/Emacs.app/Contents/MacOS/Emacs
 
 .PHONY: clean
 clean:
@@ -19,7 +18,7 @@ lint-fix:
 .PHONY: tangle
 tangle:
 	@echo "Generating source files from org files..."
-	$(EMACS) -Q --batch --eval "(progn (load-file \"tangle-all.el\") (tangle-dir \"org\"))"
+	emacs -Q --batch --eval "(progn (load-file \"tangle-all.el\") (tangle-dir \"org\"))"
 
 .PHONY: code-quality-check
 code-quality-check: tangle
