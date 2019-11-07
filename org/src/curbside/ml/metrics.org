@@ -8,6 +8,9 @@
 - [[#namespace-definition][Namespace definition]]
 - [[#model-metrics][Model metrics]]
 - [[#metrics-optimization][Metrics Optimization]]
+- [[#feature-metrics][Feature metrics]]
+  - [[#specification][Specification]]
+  - [[#compute-metrics][Compute metrics]]
 
 * Introduction
 
@@ -42,9 +45,24 @@ The main metrics involved in =regression= tasks are:
 (ns curbside.ml.metrics
   (:refer-clojure :exclude [comparator])
   (:require
+   [clojure.spec.alpha :as s]
+   [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.utils.spec :as spec-utils]
    [curbside.ml.utils.stats :as stats]
-   [curbside.ml.utils.parsing :as parsing])
-  (:import (weka.classifiers.evaluation ConfusionMatrix ThresholdCurve)))
+   [curbside.ml.utils.parsing :as parsing]
+   [curbside.ml.utils.weka :as weka])
+  (:import
+   (weka.classifiers.evaluation ConfusionMatrix ThresholdCurve)
+   (weka.attributeSelection AttributeSelection
+                            CfsSubsetEval
+                            CorrelationAttributeEval
+                            GainRatioAttributeEval
+                            InfoGainAttributeEval
+                            ReliefFAttributeEval
+                            SymmetricalUncertAttributeEval
+                            OneRAttributeEval
+                            GreedyStepwise
+                            Ranker)))
 #+END_SRC
 
 * Model metrics
@@ -119,4 +137,89 @@ What we do here is to define each of those classification and regression metrics
         :relative-absolute-error <
         :mean-absolute-error <}
        metric))
+#+END_SRC
+* Feature metrics
+** Specification
+
+| key              | type                  | description                                                                                                                                                                                                   |
+|------------------+-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| =:evaluators= | =vector of evaluator= | vector of evaluators that we want to use to evaluate the features. Available evaluators are: =:cfs-subset=, =:correlation=, =:gain-ratio=, =:info-gain=, =:one-r=, =:symmetrical-uncertainty= and =:relief-f= |
+
+Each of the evaluator are different method to evaluate features within a model. Here is a description of each of those methods:
+
+| evaluator                  | description                                                                                                                                                                                                                                                                                     |
+|----------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| =:cfs-subset=              | Evaluates the worth of a subset of attributes by considering the individual predictive ability of each feature along with the degree of redundancy between them. Subsets of features that are highly correlated with the class while having low intercorrelation are preferred.                 |
+| =:correlation=             | Evaluates the worth of an attribute by measuring the correlation (Pearson's) between it and the class. Nominal attributes are considered on a value by value basis by treating each value as an indicator. An overall correlation for a nominal attribute is arrived at via a weighted average. |
+| =:gain-ratio=              | Evaluates the worth of an attribute by measuring the gain ratio with respect to the class.                                                                                                                                                                                                      |
+| =:info-gain=               | Evaluates the worth of an attribute by measuring the information gain with respect to the class.                                                                                                                                                                                                |
+| =:relief-f=                | Evaluates the worth of an attribute by repeatedly sampling an instance and considering the value of the given attribute for the nearest instance of the same and different class. Can operate on both discrete and continuous class data.                                                       |
+| =:one-r=                   | Evaluates the worth of an attribute by using the OneR classifier.                                                                                                                                                                                                                               |
+| =:symmetrical-uncertainty= | Evaluates the worth of an attribute by measuring the symmetrical uncertainty with respect to the class.                                                                                                                                                                                         |
+
+#+BEGIN_SRC clojure
+(s/def ::evaluator #{:cfs-subset
+                     :correlation
+                     :gain-ratio
+                     :info-gain
+                     :relief-f
+                     :one-r
+                     :symmetrical-uncertainty})
+(s/def ::evaluators (s/coll-of ::evaluator :distinct true))
+#+END_SRC
+
+** Compute metrics
+
+#+BEGIN_SRC clojure
+(defn- get-attribute-key
+  [id instances]
+  (keyword
+   (.name
+    (.attribute instances id))))
+
+(defn- evaluate-feature
+  [evaluator instances]
+  (let [attribute-selection (AttributeSelection.)
+        eval (case evaluator
+               :cfs-subset (CfsSubsetEval.)
+               :correlation (CorrelationAttributeEval.)
+               :gain-ratio (GainRatioAttributeEval.)
+               :info-gain (InfoGainAttributeEval.)
+               :relief-f (ReliefFAttributeEval.)
+               :one-r (OneRAttributeEval.)
+               :symmetrical-uncertainty (SymmetricalUncertAttributeEval.))
+        search (case evaluator
+                 :cfs-subset (GreedyStepwise.)
+                 :correlation (Ranker.)
+                 :gain-ratio (Ranker.)
+                 :info-gain (Ranker.)
+                 :relief-f (Ranker.)
+                 :one-r (Ranker.)
+                 :symmetrical-uncertainty (Ranker.))]
+    (.setEvaluator attribute-selection eval)
+    (.setSearch attribute-selection search)
+    (.SelectAttributes attribute-selection instances)
+    (if (= :cfs-subset evaluator)
+      (->> (.selectedAttributes attribute-selection)
+           (mapv (fn [id]
+                   (get-attribute-key (int id) instances)))
+           (remove #{:label}))
+      (->> (.rankedAttributes attribute-selection)
+           (map (fn [[id rank]]
+                  {(get-attribute-key (int id) instances) rank}))
+           (apply merge)))))
+
+(defn- get-training-instances
+  [training-set-csv-path predictor-type]
+  (weka/problem
+   (conversion/csv-to-arff training-set-csv-path predictor-type)))
+
+(defn feature-metrics
+  [training-set-csv-path predictor-type evaluators]
+  {:pre [(spec-utils/check ::evaluators evaluators)]}
+  (let [instances (get-training-instances training-set-csv-path predictor-type)]
+    (reduce (fn [metrics evaluator]
+              (assoc metrics evaluator (evaluate-feature evaluator instances)))
+            {}
+            evaluators)))
 #+END_SRC

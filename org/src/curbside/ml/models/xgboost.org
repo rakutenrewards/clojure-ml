@@ -238,7 +238,9 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
                      "multi:softprob"
                      "rank:pairwise"
                      "reg:gamma"
-                     "reg:tweedie"})
+                     "reg:tweedie"
+                     "reg:squarederror"
+                     "reg:squaredlogerror"})
 (s/def ::base_score (s/double-in :infinite? false :NaN? false))
 (s/def ::seed integer?)
 (s/def ::num-rounds integer?)
@@ -248,7 +250,7 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
           :opt-un [::booster
                    ::silent
                    ::nthread
-                   ::eta
+                   ::learning_rate
                    ::gamma
                    ::max_depth
                    ::min_child_weight
