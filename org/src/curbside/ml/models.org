@@ -442,9 +442,10 @@ The supported hyperparameter search functions are the follwing:
 
 (s/def ::random-search-data-spec (s/multi-spec random-search-data-spec :type))
 
-(s/def ::hyperparameter-search-space-random (fn [x] (reduce #(and %1 %2)
-                                                            (map (fn [[k v]]
-                                                                   (spec/check ::random-search-data-spec v)) x))))
+(s/def ::hyp-key-check keyword?)
+
+(s/def ::hyperparameter-search-space-random
+    (s/map-of keyowrd? ::random-search-data-spec))
 
 (s/def ::hyperparameter-search-space-grid (s/map-of keyword?
                                                (s/coll-of (s/or :double (s/double-in :infinite? false :NaN? false)
@@ -473,16 +474,11 @@ The supported hyperparameter search functions are the follwing:
 (defn- random-value
   "Generate random values for the given set of parameter constraints which are
    used for random search"
-  [constraints]
-  (let [type (:type constraints)
-        min-value (:min constraints)
-        max-value (:max constraints)
-        string-values (:values constraints)]
+  [{:keys [min max type values]}]
     (case type
-      "integer" (+ (rand-int (- max-value min-value)) min-value)
-      "decimal" (+ (rand (- max-value min-value)) min-value)
-      "string" (rand-nth string-values)))
-  )
+      "integer" (+ (rand-int (- max min)) min)
+      "decimal" (+ (rand (- max min)) min)
+      "string" (rand-nth values)))
 
 (defn random-search-combos
   "Given the hyperparameter search space, generate a given number of random
@@ -505,8 +501,7 @@ The supported hyperparameter search functions are the follwing:
          (spec/check (s/nilable ::hyperparameter-search-fn) hyperparameter-search-fn)
          (case (:type hyperparameter-search-fn)
                              :random (spec/check ::hyperparameter-search-space-random hyperparameter-search-space)
-                             :grid (spec/check ::hyperparameter-search-space-grid hyperparameter-search-space))
-         ]}
+                             :grid (spec/check ::hyperparameter-search-space-grid hyperparameter-search-space))]}
   (let [hyperparameter-search-fn (or hyperparameter-search-fn {:type :grid})
         selection-metric (or selection-metric :roc-auc)
         k-folds (or k-folds 2)
