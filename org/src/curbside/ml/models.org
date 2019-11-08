@@ -375,10 +375,13 @@ The supported hyperparameter search functions are the follwing:
 1. Grid Search: we exhaustively try each and every combination possible from the given search space. Note that for continuous values, it is still required to specify a finite list of values to try.
 
 #+BEGIN_SRC clojure
-(s/def ::hyperparameter-search-fn-type #{:grid :random})
+(def supported-hyperparameter-search-fns #{:grid :random})
+
+(s/def :hyperparameter-search-fn/type (s/with-gen supported-hyperparameter-search-fns
+                                                  #(s/gen supported-hyperparameter-search-fns)))
 
 (s/def ::hyperparameter-search-fn-common
-  (s/keys :req-un [::hyperparameter-search-fn-type]))
+  (s/keys :req-un [:hyperparameter-search-fn/type]))
 
 (defmulti hyperparameter-search-fn :type)
 
@@ -394,45 +397,59 @@ The supported hyperparameter search functions are the follwing:
 
 (s/def ::hyperparameter-search-fn (s/multi-spec hyperparameter-search-fn :type))
 
-(s/def ::random-search-data-type #{:integer :decimal :string})
+(def supported-random-search-data-types #{"integer" "decimal" "string"})
+
+(s/def :random-search-data/type (s/with-gen supported-random-search-data-types
+                                                  #(s/gen supported-random-search-data-types)))
 
 (s/def ::random-search-data-common
-  (s/keys :req-un [::random-search-data-type]))
+  (s/keys :req-un [:random-search-data/type]))
 
-(s/def ::random-search-data-integer-min int?)
+(s/def ::values (s/coll-of string?))
 
-(s/def ::random-search-data-integer-max int?)
+(s/def ::random-search-data-string (s/keys :req-un [::values]))
 
-(s/def ::random-search-data-decimal-max decimal?)
+(s/def ::random-search-data-decimal (fn [map]
+                                      (and (< (:min map) (:max map))
+                                           (contains? map :min)
+                                           (contains? map :max)
+                                           (float? (:min map))
+                                           (float? (:max map)))))
 
-(s/def ::random-search-data-decimal-min decimal?)
-
-(s/def ::random-search-data-string-values (s/coll-of string?))
-
-(s/def ::random-search-data-integer (s/keys :req-un [::random-search-data-integer-min
-                                                     ::random-search-data-integer-max]))
-(s/def ::random-search-data-decimal (s/keys :req-un [::random-search-data-decimal-min
-                                                     ::random-search-data-decimal-max]))
-(s/def ::random-search-data-string (s/keys :req-un [::random-search-data-string-values]))
+(s/def ::random-search-data-integer (fn [map]
+                                        (and (< (:min map) (:max map))
+                                             (contains? map :min)
+                                             (contains? map :max)
+                                             (integer? (:min map))
+                                             (integer? (:max map)))))
 
 (defmulti random-search-data-spec :type)
 
-(defmethod random-search-data-spec :integer [_]
+(defmethod random-search-data-spec "integer" [_]
   (s/merge
     ::random-search-data-integer
     ::random-search-data-common))
 
-(defmethod random-search-data-spec :decimal [_]
+(defmethod random-search-data-spec "decimal" [_]
   (s/merge
     ::random-search-data-decimal
     ::random-search-data-common))
 
-(defmethod random-search-data-spec :string [_]
+(defmethod random-search-data-spec "string" [_]
   (s/merge
     ::random-search-data-string
     ::random-search-data-common))
 
 (s/def ::random-search-data-spec (s/multi-spec random-search-data-spec :type))
+
+(s/def ::hyperparameter-search-space-random (fn [x] (reduce #(and %1 %2)
+                                                            (map (fn [[k v]]
+                                                                   (spec/check ::random-search-data-spec v)) x))))
+
+(s/def ::hyperparameter-search-space-grid (s/map-of keyword?
+                                               (s/coll-of (s/or :double (s/double-in :infinite? false :NaN? false)
+                                                                :integer integer?
+                                                                :string string?))))
 
 ;; Algorithm specific hyperparameters
 
@@ -462,9 +479,9 @@ The supported hyperparameter search functions are the follwing:
         max-value (:max constraints)
         string-values (:values constraints)]
     (case type
-      :integer (+ (rand-int (- max-value min-value)) min-value)
-      :decimal (+ (rand (- max-value min-value)) min-value)
-      :string (rand-nth string-values)))
+      "integer" (+ (rand-int (- max-value min-value)) min-value)
+      "decimal" (+ (rand (- max-value min-value)) min-value)
+      "string" (rand-nth string-values)))
   )
 
 (defn random-search-combos
@@ -486,12 +503,13 @@ The supported hyperparameter search functions are the follwing:
          (spec/check ::predictor-type predictor-type)
          (spec/check ::hyperparameters hyperparameters)
          (spec/check (s/nilable ::hyperparameter-search-fn) hyperparameter-search-fn)
-         (case (:type hyperparameter-search-space)
-                    :random ((reduce #(and %1 %2)
+         (case (:type hyperparameter-search-fn)
+                    :random (reduce #(and %1 %2)
                                      (map (fn [[k v]]
-                                            (random-search-data-spec v))
-                                          hyperparameter-search-space)))
+                                            (s/check ::random-search-data-spec v))
+                                          hyperparameter-search-space))
                     )
+                    :grid (s/check ::hyperparameter-search-space-grid hyperparameter-search-space)
          ]}
   (let [hyperparameter-search-fn (or hyperparameter-search-fn {:type :grid})
         selection-metric (or selection-metric :roc-auc)
