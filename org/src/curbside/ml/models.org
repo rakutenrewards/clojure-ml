@@ -375,10 +375,10 @@ The supported hyperparameter search functions are the follwing:
 1. Grid Search: we exhaustively try each and every combination possible from the given search space. Note that for continuous values, it is still required to specify a finite list of values to try.
 
 #+BEGIN_SRC clojure
-(def supported-hyperparameter-search-fns #{:grid :random})
+(def supported-hyperparameter-search-fn-types #{:grid :random})
 
-(s/def :hyperparameter-search-fn/type (s/with-gen supported-hyperparameter-search-fns
-                                                  #(s/gen supported-hyperparameter-search-fns)))
+(s/def :hyperparameter-search-fn/type (s/with-gen supported-hyperparameter-search-fn-types
+                                                  #(s/gen supported-hyperparameter-search-fn-types)))
 
 (s/def ::hyperparameter-search-fn-common
   (s/keys :req-un [:hyperparameter-search-fn/type]))
