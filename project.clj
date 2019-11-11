@@ -7,6 +7,7 @@
                  [medley "1.2.0"]
                  [org.clojure/math.combinatorics "0.1.6"]
                  [com.climate/claypoole "1.1.4"]
+                 [org.clojure/test.check "0.10.0"]
 
                  ;; Spec helper
                  [expound "0.7.2"]
