@@ -403,9 +403,9 @@ The supported hyperparameter search functions are the follwing:
 (s/def ::random-search-space-dimension-common
   (s/keys :req-un [:random-search-space-dimension/type]))
 
-(s/def ::values (s/coll-of string? :distinct true))
+(s/def :string/values (s/coll-of string? :distinct true))
 
-(s/def ::random-search-space-dimension-string (s/keys :req-un [::values]))
+(s/def ::random-search-space-dimension-string (s/keys :req-un [:string/values]))
 
 (s/def :decimal/min float?)
 (s/def :decimal/max float?)
@@ -472,10 +472,10 @@ The supported hyperparameter search functions are the follwing:
   "Generate random values for the given set of parameter constraints which are
    used for random search"
   [{:keys [min max type values]}]
-    (case type
-      "integer" (+ (rand-int (- max min)) min)
-      "decimal" (+ (rand (- max min)) min)
-      "string" (rand-nth values)))
+  (case type
+    "integer" (+ (rand-int (- max min)) min)
+    "decimal" (+ (rand (- max min)) min)
+    "string" (rand-nth values)))
 
 (defn random-search-combos
   "Given the hyperparameter search space, generate a given number of random
