@@ -377,8 +377,7 @@ The supported hyperparameter search functions are the follwing:
 #+BEGIN_SRC clojure
 (def supported-hyperparameter-search-fn-types #{:grid :random})
 
-(s/def :hyperparameter-search-fn/type (s/with-gen supported-hyperparameter-search-fn-types
-                                                  #(s/gen supported-hyperparameter-search-fn-types)))
+(s/def :hyperparameter-search-fn/type supported-hyperparameter-search-fn-types)
 
 (s/def ::hyperparameter-search-fn-common
   (s/keys :req-un [:hyperparameter-search-fn/type]))
@@ -388,69 +387,67 @@ The supported hyperparameter search functions are the follwing:
 (defmethod hyperparameter-search-fn :grid [_]
   ::hyperparameter-search-fn-common)
 
-(s/def ::random-iterations int?)
+(s/def ::iteration-count int?)
 
 (defmethod hyperparameter-search-fn :random [_]
   (s/merge
     ::hyperparameter-search-fn-common
-    (s/keys :req-un [::random-iterations])))
+    (s/keys :req-un [::iteration-count])))
 
 (s/def ::hyperparameter-search-fn (s/multi-spec hyperparameter-search-fn :type))
 
-(def supported-random-search-data-types #{"integer" "decimal" "string"})
+(def supported-random-search-space-dimension-types #{"integer" "decimal" "string"})
 
-(s/def :random-search-data/type (s/with-gen supported-random-search-data-types
-                                                  #(s/gen supported-random-search-data-types)))
+(s/def :random-search-space-dimension/type supported-random-search-space-dimension-types)
 
-(s/def ::random-search-data-common
-  (s/keys :req-un [:random-search-data/type]))
+(s/def ::random-search-space-dimension-common
+  (s/keys :req-un [:random-search-space-dimension/type]))
 
-(s/def ::values (s/coll-of string?))
+(s/def ::values (s/coll-of string? :distinct true))
 
-(s/def ::random-search-data-string (s/keys :req-un [::values]))
+(s/def ::random-search-space-dimension-string (s/keys :req-un [::values]))
 
-(s/def ::random-search-data-decimal (fn [map]
-                                      (and (< (:min map) (:max map))
-                                           (contains? map :min)
-                                           (contains? map :max)
-                                           (float? (:min map))
-                                           (float? (:max map)))))
+(s/def :decimal/min float?)
+(s/def :decimal/max float?)
+(s/def ::random-search-space-dimension-decimal (s/and (s/keys :req-un [:decimal/min :decimal/max])
+                                                   (fn [{:keys [min max]}] (< min max))))
 
-(s/def ::random-search-data-integer (fn [map]
-                                        (and (< (:min map) (:max map))
-                                             (contains? map :min)
-                                             (contains? map :max)
-                                             (integer? (:min map))
-                                             (integer? (:max map)))))
+(s/def :integer/min integer?)
+(s/def :integer/max integer?)
+(s/def ::random-search-space-dimension-integer (s/and (s/keys :req-un [:integer/min :integer/max])
+                                                   (fn [{:keys [min max]}] (< min max))))
 
-(defmulti random-search-data-spec :type)
+(defmulti random-search-space-dimension :type)
 
-(defmethod random-search-data-spec "integer" [_]
+(defmethod random-search-space-dimension "integer" [_]
   (s/merge
-    ::random-search-data-integer
-    ::random-search-data-common))
+    ::random-search-space-dimension-integer
+    ::random-search-space-dimension-common))
 
-(defmethod random-search-data-spec "decimal" [_]
+(defmethod random-search-space-dimension "decimal" [_]
   (s/merge
-    ::random-search-data-decimal
-    ::random-search-data-common))
+    ::random-search-space-dimension-decimal
+    ::random-search-space-dimension-common))
 
-(defmethod random-search-data-spec "string" [_]
+(defmethod random-search-space-dimension "string" [_]
   (s/merge
-    ::random-search-data-string
-    ::random-search-data-common))
+    ::random-search-space-dimension-string
+    ::random-search-space-dimension-common))
 
-(s/def ::random-search-data-spec (s/multi-spec random-search-data-spec :type))
+(s/def ::random-search-space-dimension (s/multi-spec random-search-space-dimension :type))
 
-(s/def ::hyp-key-check keyword?)
+(s/def ::hyperparameter-search-random-space-key-check keyword?)
 
 (s/def ::hyperparameter-search-space-random
-    (s/map-of keyowrd? ::random-search-data-spec))
+    (s/map-of ::hyperparameter-search-random-space-key-check ::random-search-space-dimension))
 
 (s/def ::hyperparameter-search-space-grid (s/map-of keyword?
                                                (s/coll-of (s/or :double (s/double-in :infinite? false :NaN? false)
                                                                 :integer integer?
-                                                                :string string?))))
+                                                                :string string? :distinct true))))
+
+(s/def ::hyperparameter-search-space (s/or :random ::hyperparameter-search-space-random
+                                           :grid ::hyperparameter-search-space-grid))
 
 ;; Algorithm specific hyperparameters
 
@@ -483,11 +480,10 @@ The supported hyperparameter search functions are the follwing:
 (defn random-search-combos
   "Given the hyperparameter search space, generate a given number of random
   combinations of parameters"
-  [random-iterations hyperparameter-search-space]
-  (repeatedly random-iterations
+  [iteration-count hyperparameter-search-space]
+  (repeatedly iteration-count
               #(into {} (map (fn [[key value]] [key (random-value value)])
               hyperparameter-search-space))))
-
 
 ;; TODO: spec hyperparam-search-space
 (defn optimize-hyperparameters
@@ -499,17 +495,15 @@ The supported hyperparameter search functions are the follwing:
          (spec/check ::predictor-type predictor-type)
          (spec/check ::hyperparameters hyperparameters)
          (spec/check (s/nilable ::hyperparameter-search-fn) hyperparameter-search-fn)
-         (case (:type hyperparameter-search-fn)
-                             :random (spec/check ::hyperparameter-search-space-random hyperparameter-search-space)
-                             :grid (spec/check ::hyperparameter-search-space-grid hyperparameter-search-space))]}
+         (spec/check ::hyperparameter-search-space hyperparameter-search-space)]}
   (let [hyperparameter-search-fn (or hyperparameter-search-fn {:type :grid})
         selection-metric (or selection-metric :roc-auc)
         k-folds (or k-folds 2)
         thread-count (or threads-pool 1)
-        random-iterations (:random-iterations hyperparameter-search-fn)
         combos (case (:type hyperparameter-search-fn)
                  :grid (grid-search-combos hyperparameter-search-space)
-                 :random (random-search-combos random-iterations hyperparameter-search-space))
+                 :random (random-search-combos (:iteration-count hyperparameter-search-fn)
+                    hyperparameter-search-space))
         eval (fn [hyperparameters-to-optimize]
                (let [result (evaluate algorithm
                                       predictor-type
