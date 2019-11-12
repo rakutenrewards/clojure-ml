@@ -1,4 +1,4 @@
-(defproject com.curbside/curbside-clojure-ml "1.5.0-SNAPSHOT"
+(defproject com.curbside/curbside-clojure-ml "1.5.0"
   :description "Library for ML model training and serving."
   :url "http://github.com/RakutenReady/curbside-clojure-ml"
   :dependencies [[org.clojure/clojure "1.10.1"]
@@ -7,6 +7,9 @@
                  [medley "1.2.0"]
                  [org.clojure/math.combinatorics "0.1.6"]
                  [com.climate/claypoole "1.1.4"]
+
+                 ;; Conjure for mocking/stubbing
+                 [org.clojars.runa/conjure "2.1.3"]
 
                  ;; Spec helper
                  [expound "0.7.2"]
