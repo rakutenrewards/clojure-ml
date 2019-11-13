@@ -375,7 +375,8 @@ The supported hyperparameter search functions are the following:
 1. Grid Search: we exhaustively try each and every combination possible from the given search space. Note that for continuous values, it is still required to specify a finite list of values to try.
 2. Random Search: From the given search space, we randomly pick values, the search space can consist of integers, decimals and strings. The integer and decimal spaces are defined by min (inclusive)
    and max (exclusive) while the string can take a finite set of values defined in "values" provided as a list. The total number of combinations tried are defined by "iteration-count" defined in
-   "hyperparameter-search-fn".
+   "hyperparameter-search-fn". This would allow us to explore values inside the continous search space which need not be explicitly defined the config like a grid search. Also, random search would
+   allow us to achieve comparable results to grid search much faster due to lesser number of iterations (depending on the number of combinations tried in grid search and iteration count).
 
 #+BEGIN_SRC clojure
 (def supported-hyperparameter-search-fn-types #{:grid :random})
@@ -480,7 +481,7 @@ The supported hyperparameter search functions are the following:
     "decimal" (+ (rand (- max min)) min)
     "string" (rand-nth values)))
 
-(defn random-search-combos
+(defn- random-search-combos
   "Given the hyperparameter search space, generate a given number of random
   combinations of parameters"
   [iteration-count hyperparameter-search-space]
@@ -540,65 +541,74 @@ The supported hyperparameter search functions are the following:
   (:require
    [clojure.test :refer [deftest is testing]]
    [curbside.ml.models :as models]
-   [curbside.ml.training-sets.conversion :as conversion]
-   [conjure.core :refer [mocking stubbing verify-call-times-for verify-first-call-args-for]]
+   [conjure.core :refer [stubbing verify-call-times-for verify-first-call-args-for]]
    [curbside.ml.utils.tests :as tutils]))
 #+END_SRC
 
 ** Hyperparameter optimization tests
 
 Here, the goal is simply test if we can get models with optimal parameters
+First, we setup some values that will be used in the tests
 
 #+BEGIN_SRC clojure :tangle ../../../../test/curbside/ml/models_test.clj
+(def grid-search-combos-stub-value [{:subsample 0.5, :max_depth 5}
+                                    {:subsample 0.5, :max_depth 6}
+                                    {:subsample 0.5, :max_depth 7}
+                                    {:subsample 0.6, :max_depth 5}
+                                    {:subsample 0.6, :max_depth 6}
+                                    {:subsample 0.6, :max_depth 7}])
+
+(def random-search-combos-stub-value [{:subsample 0.5643362797872074, :max_depth 6, :booster "dart"}
+                                      {:subsample 0.5307578644935428, :max_depth 6, :booster "dart"}
+                                      {:subsample 0.9486528438903652, :max_depth 6, :booster "dart"}
+                                      {:subsample 0.7317135931408416, :max_depth 8, :booster "dart"}
+                                      {:subsample 0.8114551550463982, :max_depth 5, :booster "dart"}
+                                      {:subsample 0.5224498589316126, :max_depth 8, :booster "dart"}
+                                      {:subsample 0.9091339560549907, :max_depth 5, :booster "dart"}
+                                      {:subsample 0.6190130901825939, :max_depth 8, :booster "dart"}
+                                      {:subsample 0.8268034625457685, :max_depth 7, :booster "dart"}
+                                      {:subsample 0.8190881875862341, :max_depth 5, :booster "dart"}])
+
+(def hyperparameter-search-space-random {:subsample {:min  0.5 :max  0.99 :type "decimal"}
+                                         :max_depth {:min  5 :max  9 :type "integer"}
+                                         :booster   {:type   "string" :values ["dart"]}})
+
 (deftest test-optimize-hyperparameters-grid
   (testing "Check if optimize hyperparameters returns a model with all valid sets of hyperparameters according to given spec or not for grid search"
-    (let [hyperparameters {:eval_metric "mae" :booster "dart"}
-          hyperparameter-search-space-grid {:subsample [0.5 0.6] :max_depth [5 6 7]}
-          hyperparameter-search-fn {:type :grid}
-          {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
-                                                                               :regression
-                                                                               ["lat" "lng"]
-                                                                               hyperparameters
-                                                                               hyperparameter-search-fn
-                                                                               hyperparameter-search-space-grid
-                                                                               tutils/dummy-regression-single-label-training-set-path)]
-      (and (is (tutils/approx= 0.6 (optimal-params :subsample) 1e-1))
-      (is (tutils/approx= 7 (optimal-params :max_depth) 1e-1))
-      (is (tutils/approx= 0.02851003408432007 (model-evaluations :mean-absolute-error) 1e-1))
-      (is (tutils/approx= 0.02851003408432007 (model-evaluations :root-mean-square-error) 1e-1))))))
-
+    (tutils/stubbing-private [models/grid-search-combos grid-search-combos-stub-value]
+      (let [hyperparameters {:eval_metric "mae" :booster "dart"}
+            hyperparameter-search-space-grid {:subsample [0.5 0.6] :max_depth [5 6 7]}
+            hyperparameter-search-fn {:type :grid}
+            {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
+                                                                                        :regression
+                                                                                        ["lat" "lng"]
+                                                                                        hyperparameters
+                                                                                        hyperparameter-search-fn
+                                                                                        hyperparameter-search-space-grid
+                                                                                        tutils/dummy-regression-single-label-training-set-path)]
+        (verify-call-times-for models/grid-search-combos 1)
+        (verify-first-call-args-for models/grid-search-combos hyperparameter-search-space-grid)
+        (is (tutils/approx= 0.6 (:subsample optimal-params) 1e-1))
+        (is (= 7 (:max_depth optimal-params)))
+        (is (tutils/approx= 0.02851 (:mean-absolute-error model-evaluations) 1e-4))
+        (is (tutils/approx= 0.02851 (:root-mean-square-error model-evaluations) 1e-4))))))
 
 (deftest test-optimize-hyperparameters-random
-  (testing "Check if optimize hyperparameters returns a model with all valid sets of hyperparameters according to given spec or not for random search"
-    (stubbing [models/random-search-combos [{:subsample 0.5643362797872074, :max_depth 6, :booster "dart"}
-                                           {:subsample 0.5307578644935428, :max_depth 6, :booster "dart"}
-                                           {:subsample 0.9486528438903652, :max_depth 6, :booster "dart"}
-                                           {:subsample 0.7317135931408416, :max_depth 8, :booster "dart"}
-                                           {:subsample 0.8114551550463982, :max_depth 5, :booster "dart"}
-                                           {:subsample 0.5224498589316126, :max_depth 8, :booster "dart"}
-                                           {:subsample 0.9091339560549907, :max_depth 5, :booster "dart"}
-                                           {:subsample 0.6190130901825939, :max_depth 8, :booster "dart"}
-                                           {:subsample 0.8268034625457685, :max_depth 7, :booster "dart"}
-                                           {:subsample 0.8190881875862341, :max_depth 5, :booster "dart"}]]
-              (let [hyperparameters {:eval_metric "mae" :booster "dart"}
-                    hyperparameter-search-space-random {:subsample {:min  0.5
-                                                                    :max  0.99
-                                                                    :type "decimal"}
-                                                        :max_depth {:min  5
-                                                                    :max  9
-                                                                    :type "integer"}
-                                                        :booster   {:type   "string"
-                                                                    :values ["dart"]}}
-                    hyperparameter-search-fn {:type :random :iteration-count 10}
-                    {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
-                                                                                                :regression
-                                                                                                ["lat" "lng"]
-                                                                                                hyperparameters
-                                                                                                hyperparameter-search-fn
-                                                                                                hyperparameter-search-space-random
-                                                                                                tutils/dummy-regression-single-label-training-set-path)]
-                (and (is (tutils/approx= 0.9486528438903652 (optimal-params :subsample) 1e-1))
-                      (is (tutils/approx= 6 (optimal-params :max_depth) 1e-1))
-                      (is (tutils/approx= 0.022209078073501587 (model-evaluations :mean-absolute-error) 1e-1))
-                      (is (tutils/approx= 0.022209078073501587 (model-evaluations :root-mean-square-error) 1e-1)))))))
+  (testing "Check if optimize hyperparameters returns a model with all valid sets of hyperparameters according to given spec or not"
+    (tutils/stubbing-private [models/random-search-combos random-search-combos-stub-value]
+      (let [hyperparameters {:eval_metric "mae" :booster "dart"}
+            hyperparameter-search-fn {:type :random :iteration-count 10}
+            {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
+                                                                                        :regression
+                                                                                        ["lat" "lng"]
+                                                                                        hyperparameters
+                                                                                        hyperparameter-search-fn
+                                                                                        hyperparameter-search-space-random
+                                                                                        tutils/dummy-regression-single-label-training-set-path)]
+        (verify-call-times-for models/random-search-combos 1)
+        (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
+        (is (tutils/approx= 0.9486 (:subsample optimal-params) 1e-4))
+        (is (= 6 (:max_depth optimal-params)))
+        (is (tutils/approx= 0.0222 (:mean-absolute-error model-evaluations) 1e-4))
+        (is (tutils/approx= 0.0222 (:root-mean-square-error model-evaluations) 1e-4))))))
 #+END_SRC
