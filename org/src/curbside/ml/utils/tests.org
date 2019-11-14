@@ -21,6 +21,8 @@ This file contains utility functions for testing purposes.
 (ns curbside.ml.utils.tests
   (:require
    [clojure.data.csv :as csv]
+   [clojure.walk :as walk]
+   [conjure.core :as conjure]
    [clojure.java.io :as io])
   (:import
    [java.io File]))
@@ -68,4 +70,22 @@ Here, we load training sets from resources.
 (defn approx=
   [x y tolerance]
   (< (Math/abs (- x y)) tolerance))
+#+END_SRC
+
+* Conjure extension
+
+These Conjure extensions allow to mock and stub private functions. They have been initially developed in curbside-analytics.
+
+#+BEGIN_SRC clojure
+(defmacro stubbing-private
+  "Allows using Conjure's `stubbing` macro with private definitions."
+  [bindings & body]
+  (let [kvs      (partition 2 bindings)
+        privates (map first  kvs)
+        stubbing (map second kvs)
+        defnames (map (comp gensym name) privates)]
+    `(do ~@(map (fn [x] `(defn ~x [& _#])) defnames)
+         (conjure/stubbing ~(vec (interleave defnames stubbing))
+           (with-redefs ~(vec (interleave privates defnames))
+             ~@(walk/postwalk-replace (zipmap privates defnames) body))))))
 #+END_SRC
