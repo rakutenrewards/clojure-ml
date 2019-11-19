@@ -411,13 +411,13 @@ The supported hyperparameter search functions are the following:
 
 (s/def ::random-search-space-dimension-string (s/keys :req-un [:string/values]))
 
-(s/def :decimal/min float?)
-(s/def :decimal/max float?)
+(s/def :decimal/min (s/double-in :infinite? false :NaN? false))
+(s/def :decimal/max (s/double-in :infinite? false :NaN? false))
 (s/def ::random-search-space-dimension-decimal (s/and (s/keys :req-un [:decimal/min :decimal/max])
                                                    (fn [{:keys [min max]}] (< min max))))
 
-(s/def :integer/min integer?)
-(s/def :integer/max integer?)
+(s/def :integer/min (s/int-in Integer/MIN_VALUE Integer/MAX_VALUE))
+(s/def :integer/max (s/int-in Integer/MIN_VALUE Integer/MAX_VALUE))
 (s/def ::random-search-space-dimension-integer (s/and (s/keys :req-un [:integer/min :integer/max])
                                                    (fn [{:keys [min max]}] (< min max))))
 
@@ -448,7 +448,7 @@ The supported hyperparameter search functions are the following:
 (s/def ::hyperparameter-search-space-grid (s/map-of keyword?
                                                (s/coll-of (s/or :double (s/double-in :infinite? false :NaN? false)
                                                                 :integer integer?
-                                                                :string string? :distinct true))))
+                                                                :string string?) :distinct true)))
 
 (s/def ::hyperparameter-search-space (s/or :random ::hyperparameter-search-space-random
                                            :grid ::hyperparameter-search-space-grid))
