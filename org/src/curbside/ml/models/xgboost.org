@@ -84,8 +84,8 @@ parameters into a Java Map, and call the =train= method on =XGBoost=.
    (walk/stringify-keys hyperparameters)
    (int (or (:num-rounds hyperparameters) default-num-rounds))
    {}
-   (:obj-fn hyperparameters)
-   (:eval-fn hyperparameters)))
+   nil
+   nil))
 #+END_SRC
 
 * Dispose
@@ -223,8 +223,7 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
 (s/def ::skip_drop ::double-between-zero-and-one)
 (s/def ::updater #{"shotgun" "coord_descent"})
 (s/def ::tweedie_variance_power ::double-between-zero-and-one)
-(s/def ::objective #{"reg:linear"
-                     "reg:logistic"
+(s/def ::objective #{"reg:logistic"
                      "binary:logistic"
                      "binary:logitraw"
                      "binary:hinge"
@@ -327,7 +326,7 @@ Here, the goal of the test is simply to see if we can train an xgboost model on 
 #+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/models/xgboost_test.clj
 (deftest test-train-and-predict
   (testing "given a dataset with a single label, when training, then the model always return a prediction close to this label."
-    (let [hyperparamters {:num-rounds 5 :booster "dart" :learning_rate 0.9}
+    (let [hyperparamters {:verbosity 3 :num-rounds 5 :booster "dart" :learning_rate 0.9 :objective "reg:squarederror"}
           model (xgboost/train tutils/dummy-regression-single-label-training-set-path hyperparamters)
           prediction (xgboost/predict model hyperparamters [0 0])]
       (is (tutils/approx= 0.0 prediction 1e-1)))))
