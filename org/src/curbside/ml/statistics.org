@@ -1,0 +1,89 @@
+#+PROPERTY: header-args:clojure :mkdirp yes :noweb yes :padline yes :results silent :comments link :tangle ../../../../src/curbside/ml/statistics.clj
+#+OPTIONS: toc:2
+
+* Table of Contents                                             :toc:noexport:
+- [[#namespace-definition][Namespace Definition]]
+  - [[#tests][Tests]]
+- [[#introduction][Introduction]]
+- [[#interquartile-range-iqr][Interquartile Range (IQR)]]
+- [[#tests-1][Tests]]
+  - [[#interquartile-range-iqr-1][Interquartile Range (IQR)]]
+
+* Namespace Definition
+
+#+BEGIN_SRC clojure
+(ns curbside.ml.statistics
+  (:import (org.apache.commons.math3.stat.descriptive DescriptiveStatistics)))
+#+END_SRC
+
+** Tests
+
+#+BEGIN_SRC clojure :tangle ../../../../test/curbside/ml/statistics_test.clj
+(ns curbside.ml.statistics-test
+  (:require
+   [clojure.test :refer [deftest is testing use-fixtures]]
+   [curbside.ml.statistics :as stats]))
+#+END_SRC
+
+* Introduction
+
+This namespace provides stats functions. Most of the heavy lifting is done by the Apache Common Math3 library.
+
+* Interquartile Range (IQR)
+
+#+BEGIN_SRC clojure
+(defn descriptive-stats
+  [xs]
+  (let [stats (DescriptiveStatistics. (double-array xs))
+        q1 (.getPercentile stats 25)
+        q3 (.getPercentile stats 75)]
+    {:mean (.getMean stats)
+     :median (.getPercentile stats 50)
+     :q1 q1
+     :q3 q3
+     :iqr (- q3 q1)}))
+
+(defn iqr-outliers-mask
+  "Returns a seq of booleans the same length as `xs`, where true indicates that
+  the corresponding element in `xs` is an outlier. Outliers are values that are
+  more than 1.5 times the Interquartile Range (IQR) away from the median."
+  [xs]
+  (let [{:keys [q1 q3 iqr]} (descriptive-stats xs)
+        min (- q1 (* iqr 1.5))
+        max (+ q3 (* iqr 1.5))]
+    (map #(not (<= min % max)) xs)))
+
+(defn remove-iqr-outliers
+  [xs]
+  (->> xs
+       (map vector (iqr-outliers-mask xs))
+       (remove (fn [[outlier? _x]] outlier?))
+       (map second)))
+#+END_SRC
+
+* Tests
+
+** Interquartile Range (IQR)
+
+#+BEGIN_SRC clojure :tangle ../../../../test/curbside/ml/statistics_test.clj
+(deftest test-descriptive-stats
+  (let [xs [7 7 31 31 47 75 87 115 116 119 119 155 177]]
+    (is (= {:mean (double (/ 1086 13))
+            :median 87.0
+            :q1 31.0
+            :q3 119.0
+            :iqr 88.0}
+           (stats/descriptive-stats xs)))))
+
+(deftest test-descriptive-stat)
+
+(def some-numbers-with-outliers [1 2 10 2 33 5 0 4 -100])
+
+(deftest test-iqr-outliers-mask
+  (is (= [false false false false true false false false true]
+         (stats/iqr-outliers-mask some-numbers-with-outliers))))
+
+(deftest test-remove-iqr-outliers
+  (is (= [1 2 10 2 5 0 4]
+         (stats/remove-iqr-outliers some-numbers-with-outliers))))
+#+END_SRC
