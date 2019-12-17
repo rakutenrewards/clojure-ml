@@ -1,4 +1,4 @@
-(defproject com.curbside/curbside-clojure-ml "2.1.0"
+(defproject com.curbside/curbside-clojure-ml "2.2.0"
   :description "Library for ML model training and serving."
   :url "http://github.com/RakutenReady/curbside-clojure-ml"
   :dependencies [[org.clojure/clojure "1.10.1"]
@@ -25,7 +25,10 @@
                  [guru.nidi/graphviz-java "0.11.0"]
 
                  ;; xgboost
-                 [ml.dmlc/xgboost4j "0.90"]]
+                 [ml.dmlc/xgboost4j "0.90"]
+
+                 ;; Apache Commons Math3
+                 [org.apache.commons/commons-math3 "3.6.1"]]
 
   :profiles {:uberjar {:aot :all}
              :ci {:plugins [[test2junit "1.3.3"]]}
