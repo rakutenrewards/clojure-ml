@@ -46,25 +46,52 @@ This namespace provides stats functions. Most of the heavy lifting is done by th
 (defn iqr-outliers-mask
   "Returns a seq of booleans the same length as `xs`, where true indicates that
   the corresponding element in `xs` is an outlier. Outliers are values that are
-  more than 1.5 times the Interquartile Range (IQR) away from the median."
-  [xs]
-  (let [{:keys [q1 q3 iqr]} (descriptive-stats xs)
-        min (- q1 (* iqr 1.5))
-        max (+ q3 (* iqr 1.5))]
-    (map #(not (<= min % max)) xs)))
+  more than 1.5 times the Interquartile Range (IQR) away from the median. The
+  2-arity version instead accepts a key `k` and a list of `maps`, and returns a
+  masks indicating the maps for which the value of `k` is an outlier."
+  ([xs]
+   (let [{:keys [q1 q3 iqr]} (descriptive-stats xs)
+         min (- q1 (* iqr 1.5))
+         max (+ q3 (* iqr 1.5))]
+     (map #(not (<= min % max)) xs)))
+  ([k maps]
+   (let [xs (map k maps)]
+     (iqr-outliers-mask xs))))
+
+(defn- remove-seq-values
+  "Removes values of `xs` where the `mask` is true. Both seq must have the same
+  length."
+  [xs mask]
+  {:pre [(= (count xs) (count mask))]}
+  (->> xs
+       (map vector xs mask)
+       (remove (fn [[_x remove?]] remove?))
+       (map first)))
+
+(defn- masks-logical-or
+  [masks]
+  (->> masks
+       (apply map vector)
+       (map #(some true? %))
+       (map boolean)))
 
 (defn remove-iqr-outliers
-  [xs]
-  (->> xs
-       (map vector (iqr-outliers-mask xs))
-       (remove (fn [[outlier? _x]] outlier?))
-       (map second)))
+  "Given a seq of values `xs`, removes the values that are outliers according to
+  the IQR. The two-arity version instead accepts seq of maps contains the keys
+  `ks` and removes the maps for which at least one of the key `ks` is an outlier
+  according to the IQR."
+  ([xs]
+   (remove-seq-values xs (iqr-outliers-mask xs)))
+  ([ks maps]
+   (let [masks (map #(iqr-outliers-mask % maps) ks)]
+     (remove-seq-values maps (masks-logical-or masks)))))
 #+END_SRC
 
 * Tests
 
 ** Interquartile Range (IQR)
 
+#+NAME: iqr-test
 #+BEGIN_SRC clojure :tangle ../../../../test/curbside/ml/statistics_test.clj
 (deftest test-descriptive-stats
   (let [xs [7 7 31 31 47 75 87 115 116 119 119 155 177]]
@@ -75,15 +102,32 @@ This namespace provides stats functions. Most of the heavy lifting is done by th
             :iqr 88.0}
            (stats/descriptive-stats xs)))))
 
-(deftest test-descriptive-stat)
-
 (def some-numbers-with-outliers [1 2 10 2 33 5 0 4 -100])
+(def some-maps-with-outliers [{:a 0   :b 10}
+                              {:a 1   :b -1}
+                              {:a 1   :b -1}
+                              {:a 2   :b 0}
+                              {:a 2   :b 0}
+                              {:a 3   :b 1}
+                              {:a 100 :b 1}])
 
 (deftest test-iqr-outliers-mask
   (is (= [false false false false true false false false true]
          (stats/iqr-outliers-mask some-numbers-with-outliers))))
 
+(deftest test-mask-logical-or
+  (is (= [true false true true true]
+       (#'stats/masks-logical-or [[true false false true  true]
+                                  [true false false true  true]
+                                  [true false true  false true]]))))
+
 (deftest test-remove-iqr-outliers
   (is (= [1 2 10 2 5 0 4]
-         (stats/remove-iqr-outliers some-numbers-with-outliers))))
+         (stats/remove-iqr-outliers some-numbers-with-outliers)))
+  (is (= [{:a 1 :b -1}
+          {:a 1 :b -1}
+          {:a 2 :b 0}
+          {:a 2 :b 0}
+          {:a 3 :b 1}]
+         (stats/remove-iqr-outliers [:a :b] some-maps-with-outliers))))
 #+END_SRC
