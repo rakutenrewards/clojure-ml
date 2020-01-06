@@ -7,9 +7,11 @@
 
 ;; Install last version of org
 (require 'package)
-(setq package-archives '(("org" . "http://orgmode.org/elpa/")
-                         ("melpa" . "http://melpa.milkbox.net/packages/")))
-(setq package-archive-priorities '(("org"   . 2)
+(setq package-archives '(("org" . "https://orgmode.org/elpa/")
+                         ("gnu-elpa" . "https://elpa.gnu.org/packages/")
+                         ("melpa" . "https://melpa.org/packages/")))
+(setq package-archive-priorities '(("org"   . 3)
+                                   ("gnu-elpa" . 2)
                                    ("melpa" . 1)))
 (setq package-user-dir (concat user-emacs-directory "elpa/prediction/"))
 (package-initialize)
@@ -18,15 +20,11 @@
 
 (unless (package-installed-p 'org-plus-contrib)
   (package-refresh-contents)
-  (package-install (package-desc-create :name 'org-plus-contrib
-                                        :kind 'tar
-                                        :summary "Pinned Org package"
-                                        :archive "org"
-                                        ;;        9.1.14
-                                        :version '(20181224))))
-(unless (package-installed-p 'clojure-mode)
+  (package-install 'org-plus-contrib))
+
+(unless (package-installed-p 'cider)
   (package-refresh-contents)
-  (package-install 'clojure-mode))
+  (package-install 'cider))
 
 (require 'ob-tangle)
 (message "Org version: %s" (org-version))
