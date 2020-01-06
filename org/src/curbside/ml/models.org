@@ -14,6 +14,9 @@
 - [[#inference][Inference]]
 - [[#evaluation][Evaluation]]
 - [[#hyperparameters-optimization][Hyperparameters optimization]]
+- [[#tests][Tests]]
+  - [[#namespace-definition-1][Namespace definition]]
+  - [[#hyperparameter-optimization-tests][Hyperparameter optimization tests]]
 
 * Namespace definition
 
@@ -309,7 +312,7 @@ We will define multimethods for all of these operations. These multimethods will
   cross validation. If `multithreads` is `true`, then each fold will be
   processed on its own thread in parallel."
   [algorithm predictor-type selected-features hyperparameters training-set-path
-   & {:keys [k-folds multithreads scaling-factors feature-scaling-fns label-scaling-fns]}]
+   {:as _options :keys [k-folds multithreads scaling-factors feature-scaling-fns label-scaling-fns]}]
   {:pre [(some #{:classification :regression} #{predictor-type})]}
   (let [k-folds (or k-folds 10)
         multithreads (or multithreads false)
@@ -364,7 +367,7 @@ We will define multimethods for all of these operations. These multimethods will
   "Only cross-validate method is supported at the moment."
   [algorithm predictor-type selected-features hyperparameters training-set-path
    & {:keys [_k-folds _multithreads _scaling-factors _feature-scaling-fns _label-scaling-fns] :as options}]
-  (cross-validate algorithm predictor-type selected-features hyperparameters training-set-path hyperparameters options))
+  (cross-validate algorithm predictor-type selected-features hyperparameters training-set-path options))
 #+END_SRC
 
 * Hyperparameters optimization
@@ -590,8 +593,8 @@ First, we setup some values that will be used in the tests
         (verify-first-call-args-for models/grid-search-combos hyperparameter-search-space-grid)
         (is (tutils/approx= 0.6 (:subsample optimal-params) 1e-1))
         (is (= 7 (:max_depth optimal-params)))
-        (is (tutils/approx= 0.02851 (:mean-absolute-error model-evaluations) 1e-4))
-        (is (tutils/approx= 0.02851 (:root-mean-square-error model-evaluations) 1e-4))))))
+        (is (tutils/approx= 0.04606 (:mean-absolute-error model-evaluations) 1e-4))
+        (is (tutils/approx= 0.04606 (:root-mean-square-error model-evaluations) 1e-4))))))
 
 (deftest test-optimize-hyperparameters-random
   (testing "Check if optimize hyperparameters returns a model with all valid sets of hyperparameters according to given spec or not"
@@ -609,6 +612,6 @@ First, we setup some values that will be used in the tests
         (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
         (is (tutils/approx= 0.9486 (:subsample optimal-params) 1e-4))
         (is (= 6 (:max_depth optimal-params)))
-        (is (tutils/approx= 0.0222 (:mean-absolute-error model-evaluations) 1e-4))
-        (is (tutils/approx= 0.0222 (:root-mean-square-error model-evaluations) 1e-4))))))
+        (is (tutils/approx= 0.0277 (:mean-absolute-error model-evaluations) 1e-4))
+        (is (tutils/approx= 0.0277 (:root-mean-square-error model-evaluations) 1e-4))))))
 #+END_SRC
