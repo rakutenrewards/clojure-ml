@@ -14,6 +14,9 @@
 - [[#inference][Inference]]
 - [[#evaluation][Evaluation]]
 - [[#hyperparameters-optimization][Hyperparameters optimization]]
+- [[#tests][Tests]]
+  - [[#namespace-definition-1][Namespace definition]]
+  - [[#hyperparameter-optimization-tests][Hyperparameter optimization tests]]
 
 * Namespace definition
 
@@ -309,7 +312,7 @@ We will define multimethods for all of these operations. These multimethods will
   cross validation. If `multithreads` is `true`, then each fold will be
   processed on its own thread in parallel."
   [algorithm predictor-type selected-features hyperparameters training-set-path
-   & {:keys [k-folds multithreads scaling-factors feature-scaling-fns label-scaling-fns]}]
+   {:as _options :keys [k-folds multithreads scaling-factors feature-scaling-fns label-scaling-fns]}]
   {:pre [(some #{:classification :regression} #{predictor-type})]}
   (let [k-folds (or k-folds 10)
         multithreads (or multithreads false)
@@ -364,7 +367,7 @@ We will define multimethods for all of these operations. These multimethods will
   "Only cross-validate method is supported at the moment."
   [algorithm predictor-type selected-features hyperparameters training-set-path
    & {:keys [_k-folds _multithreads _scaling-factors _feature-scaling-fns _label-scaling-fns] :as options}]
-  (cross-validate algorithm predictor-type selected-features hyperparameters training-set-path hyperparameters options))
+  (cross-validate algorithm predictor-type selected-features hyperparameters training-set-path options))
 #+END_SRC
 
 * Hyperparameters optimization
