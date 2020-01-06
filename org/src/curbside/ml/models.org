@@ -593,8 +593,8 @@ First, we setup some values that will be used in the tests
         (verify-first-call-args-for models/grid-search-combos hyperparameter-search-space-grid)
         (is (tutils/approx= 0.6 (:subsample optimal-params) 1e-1))
         (is (= 7 (:max_depth optimal-params)))
-        (is (tutils/approx= 0.02851 (:mean-absolute-error model-evaluations) 1e-4))
-        (is (tutils/approx= 0.02851 (:root-mean-square-error model-evaluations) 1e-4))))))
+        (is (tutils/approx= 0.04606 (:mean-absolute-error model-evaluations) 1e-4))
+        (is (tutils/approx= 0.04606 (:root-mean-square-error model-evaluations) 1e-4))))))
 
 (deftest test-optimize-hyperparameters-random
   (testing "Check if optimize hyperparameters returns a model with all valid sets of hyperparameters according to given spec or not"
@@ -612,6 +612,6 @@ First, we setup some values that will be used in the tests
         (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
         (is (tutils/approx= 0.9486 (:subsample optimal-params) 1e-4))
         (is (= 6 (:max_depth optimal-params)))
-        (is (tutils/approx= 0.0222 (:mean-absolute-error model-evaluations) 1e-4))
-        (is (tutils/approx= 0.0222 (:root-mean-square-error model-evaluations) 1e-4))))))
+        (is (tutils/approx= 0.0277 (:mean-absolute-error model-evaluations) 1e-4))
+        (is (tutils/approx= 0.0277 (:root-mean-square-error model-evaluations) 1e-4))))))
 #+END_SRC
