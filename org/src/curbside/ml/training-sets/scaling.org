@@ -239,7 +239,7 @@ Next, we define functions to scale a whole training set. We define functions to 
 At inference time, we need to unscale the predicted value to obtain a prediction that is in the source domain.
 
 #+BEGIN_SRC clojure
-(defn unscale-inference
+(defn unscale-label
   "Unscaled a single value, successively unscaling the `scaling-fns` in reverse
   order."
   [scaling-fns factors value]
@@ -349,10 +349,10 @@ At inference time, we need to unscale the predicted value to obtain a prediction
 ** Test unscaling inference
 
 #+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/training_sets/scaling_test.clj
-(deftest test-unscale-inference
+(deftest test-unscale-label
   (testing "given an inferred value, when unscaling, the value is unscaled"
-    (is (== 0.1 (scaling/unscale-inference [:log10] training-set-scaling-factors -1))))
+    (is (== 0.1 (scaling/unscale-label [:log10] training-set-scaling-factors -1))))
   (testing "given multiple scaling functions, when unscaling, the value is unscaled."
     (let [factors {:features [] :labels [{:min 0 :max 100} {}]}]
-      (is (== 100 (scaling/unscale-inference [:min-max :log10] factors 0))))))
+      (is (== 100 (scaling/unscale-label [:min-max :log10] factors 0))))))
 #+END_SRC
