@@ -248,10 +248,10 @@ We will define multimethods for all of these operations. These multimethods will
     (scaling/scale-feature-map feature-scaling-fns scaling-factors feature-map)
     feature-map))
 
-(defn- unscale-inference
+(defn- unscale-label
   [label-scaling-fns scaling-factors prediction]
   (if label-scaling-fns
-    (scaling/unscale-inference label-scaling-fns scaling-factors prediction)
+    (scaling/unscale-label label-scaling-fns scaling-factors prediction)
     prediction))
 
 (defn infer
@@ -269,7 +269,7 @@ We will define multimethods for all of these operations. These multimethods will
        (feature-scaling feature-scaling-fns scaling-factors)
        (conversion/feature-map-to-vector selected-features)
        (predict algorithm predictor-type model selected-features hyperparameters)
-       (unscale-inference label-scaling-fns scaling-factors)))
+       (unscale-label label-scaling-fns scaling-factors)))
 #+END_SRC
 
 * Evaluation
@@ -290,15 +290,16 @@ We will define multimethods for all of these operations. These multimethods will
 (defn- evaluate-fold
   [algorithm selected-features hyperparameters feature-scaling-fns label-scaling-fns scaling-factors training-csv-path validation-set eval-atoms predictor-type predictions]
   (let [model (train algorithm predictor-type training-csv-path hyperparameters)]
-    (doseq [[target & features] validation-set]
+    (doseq [[label & features] validation-set]
       (let [features-map (into {} (map vector selected-features features))
             predicted-value (infer algorithm predictor-type model selected-features hyperparameters features-map
                                    :scaling-factors scaling-factors
-                                   :feature-scaling-fns feature-scaling-fns
-                                   :label-scaling-fns label-scaling-fns )]
+                                   :feature-scaling-fns nil ;; The features are already scaled in the training set.
+                                   :label-scaling-fns label-scaling-fns)]
         (when (= predictor-type :classification)
-          (.add predictions (classify (Double/parseDouble target) predicted-value)))
-        (let [diff (- (parsing/parse-double target) predicted-value)
+          (.add predictions (classify (Double/parseDouble label) predicted-value)))
+        (let [unscaled-label (unscale-label label-scaling-fns scaling-factors (parsing/parse-double label))
+              diff (- unscaled-label predicted-value)
               abs-error (Math/abs diff)
               square-error (* diff diff)]
           (swap! (:abs-error eval-atoms) #(+ abs-error %))
