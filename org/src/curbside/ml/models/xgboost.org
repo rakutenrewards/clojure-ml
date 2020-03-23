@@ -30,6 +30,7 @@ This document defines a simple Clojure interface to XGBoost, a library for gradi
    [clojure.spec.alpha :as s]
    [clojure.walk :as walk]
    [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.training-sets.sampling :as sampling]
    [curbside.ml.utils.parsing :as parsing])
   (:import
    (ml.dmlc.xgboost4j LabeledPoint)
@@ -77,6 +78,23 @@ parameters into a Java Map, and call the =train= method on =XGBoost=.
                      (map #(->LabeledPoint ((apply juxt columns-keys) %))))]
     (DMatrix. (.iterator vectors) nil)))
 
+(defn- set-sample-weights!
+  "Sets the sample weights vector of a DMatrix. Mutates the DMatrix and returns
+   nil."
+  [dmatrix weights]
+  (.setWeight dmatrix (float-array weights)))
+
+(defn- filepath->weighted-DMatrix
+  [filepath weight-feature-name weight-label-name weight-stddev]
+  (let [columns-keys (conversion/csv-column-keys filepath)
+        maps (conversion/csv-to-maps filepath)
+        vectors (map #(->LabeledPoint ((apply juxt columns-keys) %)) maps)
+        weights (sampling/maps->sample-weights
+                 maps weight-feature-name weight-label-name weight-stddev)
+        m (DMatrix. (.iterator vectors) nil)]
+    (set-sample-weights! m weights)
+    m))
+
 (defn- split-DMatrix
   "Split the end of a DMatrix off into a second DMatrix.
    Returns the two parts of the DMatrix.
@@ -91,8 +109,14 @@ parameters into a Java Map, and call the =train= method on =XGBoost=.
     [(.slice m first-indices) (.slice m last-indices)]))
 
 (defn train
-  [training-set-path {:keys [early-stopping-rounds num-rounds validation-set-size] :as hyperparameters}]
-  (let [dm (filepath->DMatrix training-set-path)
+  [training-set-path {:keys [early-stopping-rounds num-rounds
+                             validation-set-size weight-label-name
+                             weight-feature-name weight-stddev]
+                      :as hyperparameters}]
+  (let [dm (if weight-label-name
+             (filepath->weighted-DMatrix
+              training-set-path weight-feature-name weight-label-name weight-stddev)
+             (filepath->DMatrix training-set-path))
         [train val] (split-DMatrix dm (or validation-set-size 0.0))]
     (XGBoost/train
      train
@@ -204,8 +228,9 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
 
 #+BEGIN_SRC clojure
 (defn iff
-  [x y]
-  (or (and x y) (and (not x) (and not y))))
+  [& args]
+  (or (every? identity args)
+      (every? not args)))
 
 (s/def ::double-between-zero-and-one (s/double-in :min 0.0 :max 1.0))
 (s/def ::positive-double (s/double-in :min 0.0 :infinite? false))
@@ -270,6 +295,9 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
 (s/def ::num-rounds integer?)
 (s/def ::validation-set-size ::double-between-zero-and-one)
 (s/def ::early-stopping-rounds integer?)
+(s/def ::weight-feature-name (s/or :kw keyword? :str string?))
+(s/def ::weight-label-name (s/or :kw keyword? :str string?))
+(s/def ::weight-stddev float?)
 
 (s/def ::hyperparameters
   (s/and
@@ -308,8 +336,12 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
                     ::base_score
                     ::seed
                     ::validation-set-size
-                    ::early-stopping-rounds])
-   #(iff (:validation-set-size %) (:early-stopping-rounds %))))
+                    ::early-stopping-rounds
+                    ::weight-feature-name
+                    ::weight-label-name
+                    ::weight-stddev])
+   #(iff (:validation-set-size %) (:early-stopping-rounds %))
+   #(iff (:weight-feature-name %) (:weight-label-name %) (:weight-stddev %))))
 #+END_SRC
 
 * Save and load
@@ -366,6 +398,16 @@ Here, the goal of the test is simply to see if we can train an xgboost model on 
 (deftest test-train-and-predict
   (testing "given a dataset with a single label, when training, then the model always return a prediction close to this label."
     (let [hyperparameters {:verbosity 3 :num-rounds 5 :booster "dart" :learning_rate 0.9 :objective "reg:squarederror"}
+          model (xgboost/train tutils/dummy-regression-single-label-training-set-path hyperparameters)
+          prediction (xgboost/predict model hyperparameters [0 0])]
+      (is (tutils/approx= 0.0 prediction 1e-1)))))
+
+(deftest test-sample-weighting
+  (testing "given a dataset with a single label, when training with sample weighting, then the model always return a prediction close to this label."
+    (let [hyperparameters {:verbosity 3 :num-rounds 5 :booster "dart"
+                           :learning_rate 0.9 :objective "reg:squarederror"
+                           :weight-feature-name "a" :weight-label-name "label"
+                           :weight-stddev 1.0}
           model (xgboost/train tutils/dummy-regression-single-label-training-set-path hyperparameters)
           prediction (xgboost/predict model hyperparameters [0 0])]
       (is (tutils/approx= 0.0 prediction 1e-1)))))
