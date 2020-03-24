@@ -24,6 +24,7 @@ The model namespace includes all the functions related to training set sampling.
   "The model namespace includes all the functions related to training set
   sampling."
   (:require
+   [clojure.math.numeric-tower :as math :refer [expt sqrt]]
    [curbside.ml.training-sets.conversion :as conversion])
   (:import
    (weka.filters Filter)))
@@ -130,6 +131,44 @@ Sets]]'s specs.
         (conversion/arff-to-csv sampled-training-set-file))))
 #+END_SRC
 
+** Sample weighting
+
+Sample weighting is related to sampling, and sets the relative importance of individual rows of the training set based on their numerical attributes.
+
+We implement sample weighting based on the Gaussian PDF. This requires a couple parameters: the feature to use to weight the features, the expected average value of that feature, and the standard deviation. Rows with values of the feature near the mean will be weighted more heavily, while those farther from the mean will be weighted less, proportionally to the Gaussian curve.
+
+The sample weighting function here loads a CSV training set, computes the sample weights, and returns them as a sequence of floats. This sequence of floats must be passed into a model training function that supports it. Currently, this support only exists for XGBoost.
+
+#+NAME: sample weighting
+#+BEGIN_SRC clojure
+
+(defn- gaussian-pdf
+  [y mean stddev]
+  (let [exponent (* -0.5 (expt (/ (- y mean) stddev) 2))
+        coeff (/ 1 (* stddev (sqrt (* 2 Math/PI))))]
+    (* coeff (expt Math/E exponent))))
+
+(defn maps->sample-weights
+  "Given a training set where each row is represented as a map,
+   return a sample weight vector."
+  [maps mean label-feature-name stddev]
+  (map
+   (fn [s]
+     (gaussian-pdf ((keyword label-feature-name) s)
+                   mean
+                   stddev))
+   maps))
+
+(defn filepath->sample-weights
+  "Creates sample weights from a CSV filepath, using a Gaussian PDF, with the
+   given feature name used as the mean, and the standard deviation specified as
+   a constant float."
+  [training-set-file mean label-feature-name stddev]
+  (let [samples (conversion/csv-to-maps training-set-file)]
+    (maps->sample-weights samples mean label-feature-name stddev)))
+
+#+END_SRC
+
 * Tests
 ** Namespace definition
 
@@ -137,7 +176,7 @@ Sets]]'s specs.
 (ns curbside.ml.training-sets.sampling-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.training-sets.sampling :refer [sampling-training-set]]
+   [curbside.ml.training-sets.sampling :refer [sampling-training-set filepath->sample-weights]]
    [curbside.ml.utils.tests :as tutils]))
 #+END_SRC
 
@@ -182,4 +221,11 @@ Test sampling for both classification and regression datasets.
     (let [output-path (tutils/create-temp-csv-path)]
       (sampling-training-set empty-csv output-path {:sample-size-percent 55} :regression)
       (is (= 0 (tutils/count-csv-rows output-path))))))
+
+(deftest test-sample-weighting
+  (testing "filepath->sample-weights produces a coll of floats"
+    (let [weights (filepath->sample-weights
+                   tutils/dummy-regression-single-label-training-set-path
+                   0.5 :label 0.1)]
+      (is (every? float? weights)))))
 #+END_SRC
