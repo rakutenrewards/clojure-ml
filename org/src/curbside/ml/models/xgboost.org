@@ -85,12 +85,12 @@ parameters into a Java Map, and call the =train= method on =XGBoost=.
   (.setWeight dmatrix (float-array weights)))
 
 (defn- filepath->weighted-DMatrix
-  [filepath weight-feature-name weight-label-name weight-stddev]
+  [filepath weight-mean weight-label-name weight-stddev]
   (let [columns-keys (conversion/csv-column-keys filepath)
         maps (conversion/csv-to-maps filepath)
         vectors (map #(->LabeledPoint ((apply juxt columns-keys) %)) maps)
         weights (sampling/maps->sample-weights
-                 maps weight-feature-name weight-label-name weight-stddev)
+                 maps weight-mean weight-label-name weight-stddev)
         m (DMatrix. (.iterator vectors) nil)]
     (set-sample-weights! m weights)
     m))
@@ -111,11 +111,11 @@ parameters into a Java Map, and call the =train= method on =XGBoost=.
 (defn train
   [training-set-path {:keys [early-stopping-rounds num-rounds
                              validation-set-size weight-label-name
-                             weight-feature-name weight-stddev]
+                             weight-mean weight-stddev]
                       :as hyperparameters}]
   (let [dm (if weight-label-name
              (filepath->weighted-DMatrix
-              training-set-path weight-feature-name weight-label-name weight-stddev)
+              training-set-path weight-mean weight-label-name weight-stddev)
              (filepath->DMatrix training-set-path))
         [train val] (split-DMatrix dm (or validation-set-size 0.0))]
     (XGBoost/train
@@ -187,46 +187,45 @@ some functions to convert data to/from DMatrices.
 
 For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html][The docs]].
 
-| hyper-parameter          | description                                                               | value type | possible values                               |                    default |
-|--------------------------+---------------------------------------------------------------------------+------------+-----------------------------------------------+----------------------------|
-| =alpha=                  | L1 regularization term.                                                   | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
-| =base_score=             | Initial prediction score for all instances.                               | =decimal=  | =[0.0,...]=                                   |                        0.5 |
-| =booster=                | Which base model to use                                                   | string     | =[gbtree, gblinear, dart]=                    |                     gbtree |
-| =colsample_bylevel=      | Subsample ratio of columns for each split by level.                       | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
-| =colsample_bytree=       | Subsample ratio of columns when constructing trees.                       | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
-| =early-stopping-rounds=  | max number of rounds to boost without validation set improvements         | =integer=  | =[0,...]=                                     |               0 (disabled) |
-| =eta=                    | Step size shrinkage for updates.                                          | =decimal=  | =[0.0,...,1.0]=                               |                        0.3 |
-| =gamma=                  | Min loss reduction required to add a partition.                           | =decimal=  | =[0.0, ...]=                                  |                          0 |
-| =grow_policy=            | Controls how new nodes are added.                                         | =string=   | =[depthwise, lossguide]=                      |                  depthwise |
-| =lambda=                 | L2 regularization term.                                                   | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
-| =max_bin=                | For hist tree_method, max number of bins.                                 | =integer=  | =[0,...]=                                     |                        256 |
-| =max_delta_step=         | Max delta step for each leaf output.                                      | =decimal=  | =[0,...]=                                     |                          0 |
-| =max_depth=              | Max tree depth.                                                           | =integer=  | =[0,...]=                                     |                          6 |
-| =max_leaves=             | Max number of leaves for lossguide grow_policy                            | =integer=  | =[0,...]=                                     |                          0 |
-| =min_child_weight=       | Min sum of instance weight needed in a child node.                        | =decimal=  | =[0,...]=                                     |                          1 |
-| =normalize_type=         | Normalization algorithm for dart booster.                                 | =string=   | =[tree, forest]=                              |                       tree |
-| =nthread=                | Number of parallel training threads                                       | int        | =[1, ...]=                                    | number of cores on machine |
-| =objective=              | Objective function to use.                                                | =string=   | Many values. See official docs.               |                 reg:linear |
-| =one_drop=               | Flag for dart booster: always drop at least one tree.                     | =integer=  | =[0,1]=                                       |                          0 |
-| =predictor=              | Whether to compute predictions with CPU or GPU                            | =string=   | =[cpu_predictor, gpu_predictor]=              |              cpu_predictor |
-| =process_type=           | Type of boosting process to run.                                          | =string=   | =[default, update]=                           |                    default |
-| =rate_drop=              | Dropout rate for dart booster.                                            | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
-| =refresh_leaf=           | Param for the refresh updater plugin                                      | =integer=  | =[0,1]=                                       |                          1 |
-| =sample_type=            | Sampling algorithm for dart booster.                                      | =string=   | =[uniform, weighted]=                         |                    uniform |
-| =scale_pos_weight=       | Balance of pos/neg weights, for unbalanced data.                          | =decimal=  | =[0.0...1.0]=                                 |                        1.0 |
-| =seed=                   | Random seed.                                                              | =integer=  | Any.                                          |                          0 |
-| =silent=                 | Whether to print log messages while training                              | int        | =[0,...,1]=                                   |                          0 |
-| =sketch_eps=             | For approx tree_method.                                                   | =decimal=  | =[0.0...1.0]=                                 |                       0.03 |
-| =skip_drop=              | Probability of skipping dropout for dart booster.                         | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
-| =subsample=              | Subsample ratio for training instances                                    | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
-| =tree_method=            | Tree construction algorithm.                                              | =string=   | =[auto,exact,approx,hist,gpu_exact,gpu_hist]= |                       auto |
-| =tweedie_variance_power= | Param for objective=reg:tweedie                                           | =decimal=  | =[0.0,...,1.0]=                               |                        1.5 |
-| =updater=                | Comma-separated string of tree updaters.                                  | =string=   | See official docs.                            |        grow_colmaker,prune |
-| =validation-set-size=    | What portion of training set to use for validation.                       | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
-| =weight-feature-name=    | Feature to use to set sample weights. Must also set label-name and stddev | =string=   | Any                                           |                       null |
-| =weight-label-name=      | Label to compare to weight-feature-name to set sample weights.            | =string=   | Any                                           |                       null |
-| =weight-stddev=          | Standard deviation of Gaussian PDF used to set sample weights.            | =decimal=  | Any                                           |                       null |
-|                          |                                                                           |            |                                               |                            |
+| hyper-parameter          | description                                                                             | value type | possible values                               |                    default |
+|--------------------------+-----------------------------------------------------------------------------------------+------------+-----------------------------------------------+----------------------------|
+| =alpha=                  | L1 regularization term.                                                                 | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
+| =base_score=             | Initial prediction score for all instances.                                             | =decimal=  | =[0.0,...]=                                   |                        0.5 |
+| =booster=                | Which base model to use                                                                 | string     | =[gbtree, gblinear, dart]=                    |                     gbtree |
+| =colsample_bylevel=      | Subsample ratio of columns for each split by level.                                     | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
+| =colsample_bytree=       | Subsample ratio of columns when constructing trees.                                     | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
+| =early-stopping-rounds=  | max number of rounds to boost without validation set improvements                       | =integer=  | =[0,...]=                                     |               0 (disabled) |
+| =eta=                    | Step size shrinkage for updates.                                                        | =decimal=  | =[0.0,...,1.0]=                               |                        0.3 |
+| =gamma=                  | Min loss reduction required to add a partition.                                         | =decimal=  | =[0.0, ...]=                                  |                          0 |
+| =grow_policy=            | Controls how new nodes are added.                                                       | =string=   | =[depthwise, lossguide]=                      |                  depthwise |
+| =lambda=                 | L2 regularization term.                                                                 | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
+| =max_bin=                | For hist tree_method, max number of bins.                                               | =integer=  | =[0,...]=                                     |                        256 |
+| =max_delta_step=         | Max delta step for each leaf output.                                                    | =decimal=  | =[0,...]=                                     |                          0 |
+| =max_depth=              | Max tree depth.                                                                         | =integer=  | =[0,...]=                                     |                          6 |
+| =max_leaves=             | Max number of leaves for lossguide grow_policy                                          | =integer=  | =[0,...]=                                     |                          0 |
+| =min_child_weight=       | Min sum of instance weight needed in a child node.                                      | =decimal=  | =[0,...]=                                     |                          1 |
+| =normalize_type=         | Normalization algorithm for dart booster.                                               | =string=   | =[tree, forest]=                              |                       tree |
+| =nthread=                | Number of parallel training threads                                                     | int        | =[1, ...]=                                    | number of cores on machine |
+| =objective=              | Objective function to use.                                                              | =string=   | Many values. See official docs.               |                 reg:linear |
+| =one_drop=               | Flag for dart booster: always drop at least one tree.                                   | =integer=  | =[0,1]=                                       |                          0 |
+| =predictor=              | Whether to compute predictions with CPU or GPU                                          | =string=   | =[cpu_predictor, gpu_predictor]=              |              cpu_predictor |
+| =process_type=           | Type of boosting process to run.                                                        | =string=   | =[default, update]=                           |                    default |
+| =rate_drop=              | Dropout rate for dart booster.                                                          | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
+| =refresh_leaf=           | Param for the refresh updater plugin                                                    | =integer=  | =[0,1]=                                       |                          1 |
+| =sample_type=            | Sampling algorithm for dart booster.                                                    | =string=   | =[uniform, weighted]=                         |                    uniform |
+| =scale_pos_weight=       | Balance of pos/neg weights, for unbalanced data.                                        | =decimal=  | =[0.0...1.0]=                                 |                        1.0 |
+| =seed=                   | Random seed.                                                                            | =integer=  | Any.                                          |                          0 |
+| =silent=                 | Whether to print log messages while training                                            | int        | =[0,...,1]=                                   |                          0 |
+| =sketch_eps=             | For approx tree_method.                                                                 | =decimal=  | =[0.0...1.0]=                                 |                       0.03 |
+| =skip_drop=              | Probability of skipping dropout for dart booster.                                       | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
+| =subsample=              | Subsample ratio for training instances                                                  | =decimal=  | =[0.0,...,1.0]=                               |                        1.0 |
+| =tree_method=            | Tree construction algorithm.                                                            | =string=   | =[auto,exact,approx,hist,gpu_exact,gpu_hist]= |                       auto |
+| =tweedie_variance_power= | Param for objective=reg:tweedie                                                         | =decimal=  | =[0.0,...,1.0]=                               |                        1.5 |
+| =updater=                | Comma-separated string of tree updaters.                                                | =string=   | See official docs.                            |        grow_colmaker,prune |
+| =validation-set-size=    | What portion of training set to use for validation.                                     | =decimal=  | =[0.0,...,1.0]=                               |                        0.0 |
+| =weight-mean=            | Mean of the Gaussian PDF for weights. Must also set weight-label-name and weight-stddev | =string=   | Any                                           |                       null |
+| =weight-label-name=      | Label to compare to weight-mean to set sample weights.                                  | =string=   | Any                                           |                       null |
+| =weight-stddev=          | Standard deviation of Gaussian PDF used to set sample weights.                          | =decimal=  | Any                                           |                       null |
 #+TBLFM: $4=validation-set-size=: [0.0,...,1.0], =early-stopping-rounds=: any integer
 
 #+BEGIN_SRC clojure
@@ -298,7 +297,7 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
 (s/def ::num-rounds integer?)
 (s/def ::validation-set-size ::double-between-zero-and-one)
 (s/def ::early-stopping-rounds integer?)
-(s/def ::weight-feature-name (s/or :kw keyword? :str string?))
+(s/def ::weight-mean float?)
 (s/def ::weight-label-name (s/or :kw keyword? :str string?))
 (s/def ::weight-stddev float?)
 
@@ -340,11 +339,11 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
                     ::seed
                     ::validation-set-size
                     ::early-stopping-rounds
-                    ::weight-feature-name
+                    ::weight-mean
                     ::weight-label-name
                     ::weight-stddev])
    #(iff (:validation-set-size %) (:early-stopping-rounds %))
-   #(iff (:weight-feature-name %) (:weight-label-name %) (:weight-stddev %))))
+   #(iff (:weight-mean %) (:weight-label-name %) (:weight-stddev %))))
 #+END_SRC
 
 * Save and load
@@ -409,7 +408,7 @@ Here, the goal of the test is simply to see if we can train an xgboost model on 
   (testing "given a dataset with a single label, when training with sample weighting, then the model always return a prediction close to this label."
     (let [hyperparameters {:verbosity 3 :num-rounds 5 :booster "dart"
                            :learning_rate 0.9 :objective "reg:squarederror"
-                           :weight-feature-name "a" :weight-label-name "label"
+                           :weight-mean 0.5 :weight-label-name "label"
                            :weight-stddev 1.0}
           model (xgboost/train tutils/dummy-regression-single-label-training-set-path hyperparameters)
           prediction (xgboost/predict model hyperparameters [0 0])]

@@ -144,20 +144,18 @@ The sample weighting function here loads a CSV training set, computes the sample
 
 (defn- gaussian-pdf
   [y mean stddev]
-  (let [e 2.718281828459045
-        pi 3.141592653589793
-        exponent (* -0.5 (expt (/ (- y mean) stddev) 2))
-        coeff (/ 1 (* stddev (sqrt (* 2 pi))))]
-    (* coeff (expt e exponent))))
+  (let [exponent (* -0.5 (expt (/ (- y mean) stddev) 2))
+        coeff (/ 1 (* stddev (sqrt (* 2 Math/PI))))]
+    (* coeff (expt Math/E exponent))))
 
 (defn maps->sample-weights
   "Given a training set where each row is represented as a map,
    return a sample weight vector."
-  [maps mean-feature-name label-feature-name stddev]
+  [maps mean label-feature-name stddev]
   (map
    (fn [s]
      (gaussian-pdf ((keyword label-feature-name) s)
-                   ((keyword mean-feature-name) s)
+                   mean
                    stddev))
    maps))
 
@@ -165,9 +163,9 @@ The sample weighting function here loads a CSV training set, computes the sample
   "Creates sample weights from a CSV filepath, using a Gaussian PDF, with the
    given feature name used as the mean, and the standard deviation specified as
    a constant float."
-  [training-set-file mean-feature-name label-feature-name stddev]
+  [training-set-file mean label-feature-name stddev]
   (let [samples (conversion/csv-to-maps training-set-file)]
-    (maps->sample-weights samples mean-feature-name label-feature-name stddev)))
+    (maps->sample-weights samples mean label-feature-name stddev)))
 
 #+END_SRC
 
@@ -228,6 +226,6 @@ Test sampling for both classification and regression datasets.
   (testing "filepath->sample-weights produces a coll of floats"
     (let [weights (filepath->sample-weights
                    tutils/dummy-regression-single-label-training-set-path
-                   :a :label 0.1)]
+                   0.5 :label 0.1)]
       (is (every? float? weights)))))
 #+END_SRC
