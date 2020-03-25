@@ -142,7 +142,8 @@ The sample weighting function here loads a CSV training set, computes the sample
 #+NAME: sample weighting
 #+BEGIN_SRC clojure
 
-(defn- gaussian-pdf
+(defn gaussian-pdf
+  "Helper function for creating Gaussian PDF sample weights."
   [y mean stddev]
   (let [exponent (* -0.5 (expt (/ (- y mean) stddev) 2))
         coeff (/ 1 (* stddev (sqrt (* 2 Math/PI))))]
@@ -160,12 +161,9 @@ The sample weighting function here loads a CSV training set, computes the sample
    maps))
 
 (defn filepath->sample-weights
-  "Creates sample weights from a CSV filepath, using a Gaussian PDF, with the
-   given feature name used as the mean, and the standard deviation specified as
-   a constant float."
-  [training-set-file mean label-feature-name stddev]
-  (let [samples (conversion/csv-to-maps training-set-file)]
-    (maps->sample-weights samples mean label-feature-name stddev)))
+  "Load sample weights from a weights CSV filepath"
+  [filepath]
+  (map :weight (conversion/csv-to-maps filepath)))
 
 #+END_SRC
 
@@ -224,8 +222,6 @@ Test sampling for both classification and regression datasets.
 
 (deftest test-sample-weighting
   (testing "filepath->sample-weights produces a coll of floats"
-    (let [weights (filepath->sample-weights
-                   tutils/dummy-regression-single-label-training-set-path
-                   0.5 :label 0.1)]
+    (let [weights (filepath->sample-weights tutils/dummy-example-weights-path)]
       (is (every? float? weights)))))
 #+END_SRC

@@ -7,6 +7,7 @@
                  [clj-time "0.15.2"]
                  [medley "1.2.0"]
                  [org.clojure/math.combinatorics "0.1.6"]
+                 [org.clojure/math.numeric-tower "0.0.4"]
                  [com.climate/claypoole "1.1.4"]
 
                  ;; Conjure for mocking/stubbing
