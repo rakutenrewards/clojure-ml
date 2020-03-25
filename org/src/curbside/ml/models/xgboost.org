@@ -288,9 +288,9 @@ For more details, see [[https://xgboost.readthedocs.io/en/latest/parameter.html]
 (s/def ::num-rounds integer?)
 (s/def ::validation-set-size ::double-between-zero-and-one)
 (s/def ::early-stopping-rounds integer?)
-(s/def ::weight-mean float?)
+(s/def ::weight-mean (s/double-in :infinite? false :NaN? false))
 (s/def ::weight-label-name (s/or :kw keyword? :str string?))
-(s/def ::weight-stddev float?)
+(s/def ::weight-stddev (s/double-in :infinite? false :NaN? false))
 
 (s/def ::hyperparameters
   (s/and
