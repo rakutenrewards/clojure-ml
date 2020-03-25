@@ -323,14 +323,13 @@ We will define multimethods for all of these operations. These multimethods will
   "Loads the weights file, if it can be found and is non-empty. If not, return
    constant weights of the same length as the training set."
   [training-set example-weights-path]
-  (try
+  (if (and example-weights-path (.exists (io/file example-weights-path)))
     (with-open [in-file (io/reader example-weights-path)]
       (let [[_header & weights] (csv/read-csv in-file)]
         (if (not= (count weights) (count training-set))
-          (repeat (count training-set) ["1.0"])
+          (throw (Exception. "Weights file is not the same length as training set file!"))
           weights)))
-    (catch Exception _
-      (repeat (count training-set) ["1.0"]))))
+    (repeat (count training-set) ["1.0"])))
 
 (defn- cross-validate
   "Evaluate the performance of a model using k-fold cross-validation. Takes a
