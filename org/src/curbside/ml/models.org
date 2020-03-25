@@ -80,7 +80,7 @@ We will define multimethods for all of these operations. These multimethods will
     algorithm))
 
 (defmulti train
-  (fn [algorithm predictor-type training-set-path hyperparameters]
+  (fn [algorithm predictor-type training-set-path hyperparameters & args]
     algorithm))
 
 (defmulti predict
@@ -113,8 +113,10 @@ We will define multimethods for all of these operations. These multimethods will
   (xgboost/load-from-bytes bytes))
 
 (defmethod train :xgboost
-  [_ _predictor-type training-set-path params]
-  (xgboost/train training-set-path params))
+  [_ _predictor-type training-set-path params & [weights-path]]
+  (if weights-path
+    (xgboost/train training-set-path params weights-path)
+    (xgboost/train training-set-path params)))
 
 (defmethod predict :xgboost
   [_ _predictor-type model _seleted-features hyperparameters feature-vector]
@@ -165,15 +167,15 @@ We will define multimethods for all of these operations. These multimethods will
   (decision-trees/load-from-bytes bytes))
 
 (defmethod train :c4.5
-  [algorithm predictor-type training-set hyperparameters]
+  [algorithm predictor-type training-set hyperparameters & _]
   (decision-trees/train algorithm predictor-type training-set hyperparameters))
 
 (defmethod train :m5p
-  [algorithm predictor-type training-set hyperparameters]
+  [algorithm predictor-type training-set hyperparameters & _]
   (decision-trees/train algorithm predictor-type training-set hyperparameters))
 
 (defmethod train :random-forest
-  [algorithm predictor-type training-set hyperparameters]
+  [algorithm predictor-type training-set hyperparameters & _]
   (decision-trees/train algorithm predictor-type training-set hyperparameters))
 
 (defmethod predict :c4.5
@@ -201,7 +203,7 @@ We will define multimethods for all of these operations. These multimethods will
   (svm/load filepath))
 
 (defmethod train :svm
-  [_ _predictor-type training-set-path hyperparameters]
+  [_ _predictor-type training-set-path hyperparameters & _]
   (svm/train training-set-path hyperparameters))
 
 (defmethod predict :svm
@@ -225,7 +227,7 @@ We will define multimethods for all of these operations. These multimethods will
   (linear-svm/load bytes))
 
 (defmethod train :lsvm
-  [_ _predictor-type training-set-csv-path hyperparameters]
+  [_ _predictor-type training-set-csv-path hyperparameters & _]
   (linear-svm/train training-set-csv-path hyperparameters))
 
 (defmethod predict :lsvm
@@ -288,8 +290,10 @@ We will define multimethods for all of these operations. These multimethods will
   (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
 
 (defn- evaluate-fold
-  [algorithm selected-features hyperparameters feature-scaling-fns label-scaling-fns scaling-factors training-csv-path validation-set eval-atoms predictor-type predictions]
-  (let [model (train algorithm predictor-type training-csv-path hyperparameters)]
+  [algorithm selected-features hyperparameters feature-scaling-fns label-scaling-fns scaling-factors
+   training-csv-path training-weights-path validation-set
+   eval-atoms predictor-type predictions]
+  (let [model (train algorithm predictor-type training-csv-path hyperparameters training-weights-path)]
     (doseq [[label & features] validation-set]
       (let [features-map (into {} (map vector selected-features features))
             predicted-value (infer algorithm predictor-type model selected-features hyperparameters features-map
@@ -307,30 +311,53 @@ We will define multimethods for all of these operations. These multimethods will
           (swap! (:n eval-atoms) inc))))
     (dispose algorithm model)))
 
+(defn- zip
+  [xs ys]
+  (map vector xs ys))
+
+(defn- unzip
+  [xs]
+  [(map first xs) (map second xs)])
+
+(defn- load-weights
+  "Loads the weights file, if it can be found and is non-empty. If not, return
+   constant weights of the same length as the training set."
+  [training-set example-weights-path]
+  (try
+    (with-open [in-file (io/reader example-weights-path)]
+      (let [[_header & weights] (csv/read-csv in-file)]
+        (if (not= (count weights) (count training-set))
+          (repeat (count training-set) ["1.0"])
+          weights)))
+    (catch Exception _
+      (repeat (count training-set) ["1.0"]))))
+
 (defn- cross-validate
   "Evaluate the performance of a model using k-fold cross-validation. Takes a
   training set CSV file as input and the number of `k-folds` to use for the
   cross validation. If `multithreads` is `true`, then each fold will be
   processed on its own thread in parallel."
   [algorithm predictor-type selected-features hyperparameters training-set-path
-   {:as _options :keys [k-folds multithreads scaling-factors feature-scaling-fns label-scaling-fns]}]
+   {:as _options :keys [k-folds multithreads scaling-factors feature-scaling-fns
+                        label-scaling-fns example-weights-path]}]
   {:pre [(some #{:classification :regression} #{predictor-type})]}
   (let [k-folds (or k-folds 10)
         multithreads (or multithreads false)
         [header & training-set] (with-open [in-file (io/reader training-set-path)]
-                                   (doall
-                                    (csv/read-csv in-file)))
-        folds (partition-all (/ (count training-set) k-folds) (shuffle training-set))
+                                  (doall
+                                   (csv/read-csv in-file)))
+        weights (load-weights training-set example-weights-path)
+        folds (partition-all (/ (count training-set) k-folds) (shuffle (zip training-set weights)))
         eval-atoms {:n (atom 0)
                     :abs-error (atom 0)
                     :square-error (atom 0)}
         predictions (ArrayList.)
         futures (atom [])]
-
     (loop [processed-folds 1
-           validation-set (first folds)
+           [validation-set validation-weights] (unzip (first folds))
            training-set-folds (rest folds)]
-      (let [training-csv-path (to-temp-csv-path header (apply concat training-set-folds))]
+      (let [training-csv-path (to-temp-csv-path header (apply concat (map (partial map first) training-set-folds)))
+            training-weights-path (to-temp-csv-path ["weight"] (apply concat (map (partial map second) training-set-folds)))]
         (when (<= processed-folds k-folds)
           (if multithreads
             (swap! futures conj (future (evaluate-fold algorithm
@@ -340,6 +367,7 @@ We will define multimethods for all of these operations. These multimethods will
                                                        label-scaling-fns
                                                        scaling-factors
                                                        training-csv-path
+                                                       training-weights-path
                                                        validation-set
                                                        eval-atoms
                                                        predictor-type
@@ -351,13 +379,14 @@ We will define multimethods for all of these operations. These multimethods will
                            label-scaling-fns
                            scaling-factors
                            training-csv-path
+                           training-weights-path
                            validation-set
                            eval-atoms
                            predictor-type
                            predictions))
           (recur (inc processed-folds)
-                 (first training-set-folds)
-                 (conj (rest training-set-folds) validation-set)))))
+                 (unzip (first training-set-folds))
+                 (conj (rest training-set-folds) (zip validation-set validation-weights))))))
     (when multithreads
       (doseq [f @futures]
         @f))
@@ -367,7 +396,7 @@ We will define multimethods for all of these operations. These multimethods will
 (defn evaluate
   "Only cross-validate method is supported at the moment."
   [algorithm predictor-type selected-features hyperparameters training-set-path
-   & {:keys [_k-folds _multithreads _scaling-factors _feature-scaling-fns _label-scaling-fns] :as options}]
+   & {:keys [_k-folds _multithreads _scaling-factors _feature-scaling-fns _label-scaling-fns _example-weights-path] :as options}]
   (cross-validate algorithm predictor-type selected-features hyperparameters training-set-path options))
 #+END_SRC
 
@@ -497,7 +526,8 @@ The supported hyperparameter search functions are the following:
   "This function is responsible for training a model with the best
   hyperparameters found by the provided `hyperparameter-search-fn`."
   [algorithm predictor-type selected-features hardcoded-hyperparameters hyperparameter-search-fn hyperparameter-search-space training-set-path
-   & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
+   & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns
+             label-scaling-fns example-weights-path]}]
   {:pre [(spec/check ::algorithm algorithm)
          (spec/check ::predictor-type predictor-type)
          (spec/check ::hyperparameters hardcoded-hyperparameters)
@@ -521,7 +551,8 @@ The supported hyperparameter search functions are the following:
                                       :scaling-factors scaling-factors
                                       :k-folds k-folds
                                       :feature-scaling-fns feature-scaling-fns
-                                      :label-scaling-fns label-scaling-fns)]
+                                      :label-scaling-fns label-scaling-fns
+                                      :example-weights-path example-weights-path)]
                  {:optimal-params hyperparameters
                   :selected-evaluation (get result selection-metric)
                   :model-evaluations result}))

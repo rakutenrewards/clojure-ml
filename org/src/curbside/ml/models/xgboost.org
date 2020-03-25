@@ -82,18 +82,8 @@ parameters into a Java Map, and call the =train= method on =XGBoost=.
   "Sets the sample weights vector of a DMatrix. Mutates the DMatrix and returns
    nil."
   [dmatrix weights]
+  (assert (= (count weights) (.rowNum dmatrix)))
   (.setWeight dmatrix (float-array weights)))
-
-(defn- filepath->weighted-DMatrix
-  [filepath weight-mean weight-label-name weight-stddev]
-  (let [columns-keys (conversion/csv-column-keys filepath)
-        maps (conversion/csv-to-maps filepath)
-        vectors (map #(->LabeledPoint ((apply juxt columns-keys) %)) maps)
-        weights (sampling/maps->sample-weights
-                 maps weight-mean weight-label-name weight-stddev)
-        m (DMatrix. (.iterator vectors) nil)]
-    (set-sample-weights! m weights)
-    m))
 
 (defn- split-DMatrix
   "Split the end of a DMatrix off into a second DMatrix.
@@ -109,24 +99,25 @@ parameters into a Java Map, and call the =train= method on =XGBoost=.
     [(.slice m first-indices) (.slice m last-indices)]))
 
 (defn train
-  [training-set-path {:keys [early-stopping-rounds num-rounds
-                             validation-set-size weight-label-name
-                             weight-mean weight-stddev]
-                      :as hyperparameters}]
-  (let [dm (if weight-label-name
-             (filepath->weighted-DMatrix
-              training-set-path weight-mean weight-label-name weight-stddev)
-             (filepath->DMatrix training-set-path))
-        [train val] (split-DMatrix dm (or validation-set-size 0.0))]
-    (XGBoost/train
-     train
-     (walk/stringify-keys hyperparameters)
-     (int (or num-rounds default-num-rounds))
-     (if validation-set-size {"validation" val} {})
-     nil
-     nil
-     nil
-     (or early-stopping-rounds 0))))
+  ([training-set-path hyperparams]
+   (train training-set-path hyperparams nil))
+  ([training-set-path
+    {:keys [early-stopping-rounds num-rounds validation-set-size]
+     :as hyperparameters}
+    example-weights-path]
+   (let [dm (filepath->DMatrix training-set-path)
+         weights (when example-weights-path (sampling/filepath->sample-weights example-weights-path))
+         _ (when weights (set-sample-weights! dm weights))
+         [train val] (split-DMatrix dm (or validation-set-size 0.0))]
+     (XGBoost/train
+      train
+      (walk/stringify-keys hyperparameters)
+      (int (or num-rounds default-num-rounds))
+      (if validation-set-size {"validation" val} {})
+      nil
+      nil
+      nil
+      (or early-stopping-rounds 0)))))
 
 #+END_SRC
 
@@ -410,7 +401,10 @@ Here, the goal of the test is simply to see if we can train an xgboost model on 
                            :learning_rate 0.9 :objective "reg:squarederror"
                            :weight-mean 0.5 :weight-label-name "label"
                            :weight-stddev 1.0}
-          model (xgboost/train tutils/dummy-regression-single-label-training-set-path hyperparameters)
+          model (xgboost/train
+                 tutils/dummy-regression-single-label-training-set-path
+                 hyperparameters
+                 tutils/dummy-example-weights-path)
           prediction (xgboost/predict model hyperparameters [0 0])]
       (is (tutils/approx= 0.0 prediction 1e-1)))))
 

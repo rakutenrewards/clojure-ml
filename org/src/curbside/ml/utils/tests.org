@@ -62,6 +62,8 @@ Here, we load training sets from resources.
 #+BEGIN_SRC clojure
 (def dummy-regression-single-label-training-set-path
   (io/resource "training-sets/dummy-regression-single-label.csv"))
+
+(def dummy-example-weights-path (io/resource "training-sets/dummy-weights.csv"))
 #+END_SRC
 
 * Numeric Equality
