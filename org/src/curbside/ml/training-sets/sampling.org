@@ -103,7 +103,7 @@ Sets]]'s specs.
 (defn- sample-with-replacement
   [xs n]
   (let [xsvec (vec xs)]
-    (take n (repeatedly #(nth xsvec (rand-int (count xsvec)))))))
+    (take n (repeatedly #(rand-nth xsvec)))))
 
 (defmulti sample
   (fn [training-set config predictor-type]
@@ -122,6 +122,8 @@ Sets]]'s specs.
   (let [n (count training-set)
         sample-size-n (config->sample-size n config)]
     ;; TODO: support :bias-to-uniform-class config setting
+    (when (> (:bias-to-uniform-class config) 0)
+      (throw (UnsupportedOperationException. "bias to uniform class not yet implemented.")))
     (if (:without-replacement config)
       (sample-no-replacement training-set sample-size-n)
       (sample-with-replacement training-set sample-size-n))))
