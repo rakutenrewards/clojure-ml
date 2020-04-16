@@ -152,12 +152,6 @@ some functions to convert data to/from DMatrices.
   [vec]
   (DMatrix. (.iterator [(->LabeledPoint vec)]) nil))
 
-(defn- n-trees
-  [model]
-  (let [dummy-data (->predict-DMatrix [0.0])
-        max-number-of-trees Integer/MAX_VALUE]
-    (count (first (.predictLeaf model dummy-data max-number-of-trees)))))
-
 (defn predict
   [model hyperparameters feature-vector]
   (let [;; Pad to add a dummy label at the front of the vector.
@@ -171,7 +165,7 @@ some functions to convert data to/from DMatrices.
        ;; handle is a null pointer.
        (if (= 0 (get-xgboost-handle model))
          (throw (XGBoostError. "already disposed."))
-         (.predict model dmatrix false (n-trees model))))
+         (.predict model dmatrix false Integer/MAX_VALUE))) ;; Pass a large integer to use all available trees in the model
      (ffirst))))
 #+END_SRC
 
