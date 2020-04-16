@@ -118,7 +118,6 @@ parameters into a Java Map, and call the =train= method on =XGBoost=.
       nil
       nil
       (or early-stopping-rounds 0)))))
-
 #+END_SRC
 
 * Dispose
@@ -153,11 +152,15 @@ some functions to convert data to/from DMatrices.
   [vec]
   (DMatrix. (.iterator [(->LabeledPoint vec)]) nil))
 
+(defn- n-trees
+  [model]
+  (let [dummy-data (->predict-DMatrix [0.0])
+        max-number-of-trees Integer/MAX_VALUE]
+    (count (first (.predictLeaf model dummy-data max-number-of-trees)))))
+
 (defn predict
   [model hyperparameters feature-vector]
-  (let [booster (:booster hyperparameters)
-        num-trees (int (or (:num-rounds hyperparameters) default-num-rounds))
-        ;; Pad to add a dummy label at the front of the vector.
+  (let [;; Pad to add a dummy label at the front of the vector.
         ;; It will be ignored when doing prediction
         dmatrix (->predict-DMatrix (into [1.0] feature-vector))]
     (->
@@ -168,9 +171,7 @@ some functions to convert data to/from DMatrices.
        ;; handle is a null pointer.
        (if (= 0 (get-xgboost-handle model))
          (throw (XGBoostError. "already disposed."))
-         (if (= booster "dart")
-           (.predict model dmatrix false num-trees)
-           (.predict model dmatrix))))
+         (.predict model dmatrix false (n-trees model))))
      (ffirst))))
 #+END_SRC
 
