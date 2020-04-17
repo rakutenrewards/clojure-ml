@@ -359,15 +359,12 @@ using standard XGBoost methods.
 (defn- ^:deprecated get-booster-from-file
   [filepath]
   (log/warn "[xgboost] DEPRECATED Loading the booster type from file")
-  (let [first-binary-line (first (line-seq (io/reader filepath)))]
-    (cond
-      (string/includes? first-binary-line "gbtree")
-      "gbtree"
-
-      (string/includes? first-binary-line "dart")
-      "dart"
-
-      :else
+  (let [booster (->> (io/reader filepath)
+                     (line-seq)
+                     (keep #(re-find #"dart|gbtree" %))
+                     (first))]
+    (if (some? booster)
+      booster
       (do
         (log/error "[xgboost] Could not find the booster type in the file. Assuming gbtree. This can lead to undefined behaviors if it was a dart booster.")
         "gbtree"))))
@@ -465,5 +462,7 @@ Here, the goal of the test is simply to see if we can train an xgboost model on 
   (testing "given a legacy dart model, when loading, then the booster is dart"
     (is (= "dart" (:booster (xgboost/load (tutils/resource-name-to-path-str "models/dart-legacy.xgb"))))))
   (testing "given a legacy gbtree model, when loading, then the booster is gbtree"
-    (is (= "gbtree" (:booster (xgboost/load (tutils/resource-name-to-path-str "models/gbtree-legacy.xgb")))))))
+    (is (= "gbtree" (:booster (xgboost/load (tutils/resource-name-to-path-str "models/gbtree-legacy.xgb"))))))
+  (testing "given a legacy model with no booster found in the binary file, when loading, then the booster is gbtree"
+    (is (= "gbtree" (#'xgboost/get-booster-from-file (tutils/resource-name-to-path-str "models/no-booster-legacy.xgb"))))))
 #+END_SRC
