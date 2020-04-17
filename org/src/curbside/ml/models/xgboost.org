@@ -358,7 +358,7 @@ using standard XGBoost methods.
 
 (defn- ^:deprecated get-booster-from-file
   [filepath]
-  (log/warn "[xgboost] DEPRECATED Loading the booster type from file")
+  (log/info "[xgboost] DEPRECATED Loading the booster type from the binary file")
   (let [booster (->> (io/reader filepath)
                      (line-seq)
                      (keep #(re-find #"dart|gbtree" %))
