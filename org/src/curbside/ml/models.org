@@ -75,10 +75,6 @@ We will define multimethods for all of these operations. These multimethods will
   (fn [algorithm filepath]
     algorithm))
 
-(defmulti load-from-bytes
-  (fn [algorithm bytes]
-    algorithm))
-
 (defmulti train
   (fn [algorithm predictor-type training-set-path hyperparameters & args]
     algorithm))
@@ -107,10 +103,6 @@ We will define multimethods for all of these operations. These multimethods will
 (defmethod load :xgboost
   [_ filepath]
   (xgboost/load filepath))
-
-(defmethod load-from-bytes :xgboost
-  [_ bytes]
-  (xgboost/load-from-bytes bytes))
 
 (defmethod train :xgboost
   [_ _predictor-type training-set-path params & [weights-path]]
@@ -153,18 +145,6 @@ We will define multimethods for all of these operations. These multimethods will
 (defmethod load :random-forest
   [_ file]
   (decision-trees/load file))
-
-(defmethod load-from-bytes :c4.5
-  [bytes]
-  (decision-trees/load-from-bytes bytes))
-
-(defmethod load-from-bytes :m5p
-  [bytes]
-  (decision-trees/load-from-bytes bytes))
-
-(defmethod load-from-bytes :random-forest
-  [bytes]
-  (decision-trees/load-from-bytes bytes))
 
 (defmethod train :c4.5
   [algorithm predictor-type training-set hyperparameters & _]
@@ -221,10 +201,6 @@ We will define multimethods for all of these operations. These multimethods will
 (defmethod load :lsvm
   [_ filepath]
   (linear-svm/load filepath))
-
-(defmethod load-from-bytes :lsvm
-  [_ bytes]
-  (linear-svm/load bytes))
 
 (defmethod train :lsvm
   [_ _predictor-type training-set-csv-path hyperparameters & _]
