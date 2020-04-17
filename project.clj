@@ -30,12 +30,17 @@
                  [ml.dmlc/xgboost4j "0.90"]
 
                  ;; Apache Commons Math3
-                 [org.apache.commons/commons-math3 "3.6.1"]]
+                 [org.apache.commons/commons-math3 "3.6.1"]
+
+
+                 ;; Logging
+                 [org.clojure/tools.logging "1.0.0"]]
 
   :profiles {:uberjar {:aot :all}
              :ci {:plugins [[test2junit "1.3.3"]]}
              :test {:resource-paths ["test-resources"]}
-             :dev [:test]}
+             :dev [:test
+                   {:dependencies [[org.slf4j/slf4j-simple "1.7.30"]]}]}
 
   :plugins [[com.gfredericks/how-to-ns "0.1.6"]
             [lein-ancient "0.6.15"]

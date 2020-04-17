@@ -27,7 +27,9 @@ This document defines a simple Clojure interface to XGBoost, a library for gradi
   (:refer-clojure :exclude [load])
   (:require
    [clojure.java.io :as io]
+   [clojure.tools.logging :as log]
    [clojure.spec.alpha :as s]
+   [clojure.string :as string]
    [clojure.walk :as walk]
    [curbside.ml.training-sets.conversion :as conversion]
    [curbside.ml.training-sets.sampling :as sampling]
@@ -108,16 +110,20 @@ parameters into a Java Map, and call the =train= method on =XGBoost=.
    (let [dm (filepath->DMatrix training-set-path)
          weights (when example-weights-path (sampling/filepath->sample-weights example-weights-path))
          _ (when weights (set-sample-weights! dm weights))
-         [train val] (split-DMatrix dm (or validation-set-size 0.0))]
-     (XGBoost/train
-      train
-      (walk/stringify-keys hyperparameters)
-      (int (or num-rounds default-num-rounds))
-      (if validation-set-size {"validation" val} {})
-      nil
-      nil
-      nil
-      (or early-stopping-rounds 0)))))
+         [train val] (split-DMatrix dm (or validation-set-size 0.0))
+         booster (or (:booster hyperparameters) "gbtree")
+         model (XGBoost/train
+                train
+                (walk/stringify-keys hyperparameters)
+                (int (or num-rounds default-num-rounds))
+                (if validation-set-size {"validation" val} {})
+                nil
+                nil
+                nil
+                (or early-stopping-rounds 0))]
+     (.setAttr model "booster" booster)
+     {:xgboost-model model
+      :booster booster})))
 #+END_SRC
 
 * Dispose
@@ -129,7 +135,7 @@ XGBoost is a thin wrapper around a C++ library, so most memory is allocated off-
   "Frees the memory allocated to given model."
   [model]
   (locking model
-    (.dispose model)))
+    (.dispose (:xgboost-model model))))
 #+END_SRC
 
 * Predict
@@ -153,19 +159,21 @@ some functions to convert data to/from DMatrices.
   (DMatrix. (.iterator [(->LabeledPoint vec)]) nil))
 
 (defn predict
-  [model hyperparameters feature-vector]
+  [{:keys [xgboost-model booster] :as _model} hyperparameters feature-vector]
   (let [;; Pad to add a dummy label at the front of the vector.
         ;; It will be ignored when doing prediction
         dmatrix (->predict-DMatrix (into [1.0] feature-vector))]
     (->
      ;; lock for mutual exclusion w.r.t. dispose.
-     (locking model
+     (locking xgboost-model
        ;; hack: most xgboost code paths check that handle is not null and throw
        ;; an error, but sometimes calling predict just segfaults when the
        ;; handle is a null pointer.
-       (if (= 0 (get-xgboost-handle model))
+       (if (= 0 (get-xgboost-handle xgboost-model))
          (throw (XGBoostError. "already disposed."))
-         (.predict model dmatrix false Integer/MAX_VALUE))) ;; Pass a large integer to use all available trees in the model
+         (if (= booster "dart")
+           (.predict xgboost-model dmatrix false Integer/MAX_VALUE) ;; Pass a large integer to use all available trees in the model
+           (.predict xgboost-model dmatrix))))
      (ffirst))))
 #+END_SRC
 
@@ -340,18 +348,36 @@ using standard XGBoost methods.
 #+NAME: model management
 #+BEGIN_SRC clojure
 (defn save
-  [model filepath]
-  (.saveModel model filepath)
+  [{:keys [xgboost-model] :as _model} filepath]
+  (.saveModel xgboost-model filepath)
   [filepath])
+
+(defn- get-booster-from-attributes
+  [xgboost-model]
+  (.getAttr xgboost-model "booster"))
+
+(defn- ^:deprecated get-booster-from-file
+  [filepath]
+  (log/warn "[xgboost] DEPRECATED Loading the booster type from file")
+  (let [first-binary-line (first (line-seq (io/reader filepath)))]
+    (cond
+      (string/includes? first-binary-line "gbtree")
+      "gbtree"
+
+      (string/includes? first-binary-line "dart")
+      "dart"
+
+      :else
+      (do
+        (log/error "[xgboost] Could not find the booster type in the file. Assuming gbtree. This can lead to undefined behaviors if it was a dart booster.")
+        "gbtree"))))
 
 (defn load
   [filepath]
-  (XGBoost/loadModel ^String filepath))
-
-(defn load-from-bytes
-  [bytes]
-  (with-open [input (io/input-stream bytes)]
-    (XGBoost/loadModel input)))
+  (let [m (XGBoost/loadModel ^String filepath)]
+    {:xgboost-model m
+     :booster (or (get-booster-from-attributes m)
+                  (get-booster-from-file filepath))}))
 #+END_SRC
 
 * Tests
@@ -366,7 +392,8 @@ using standard XGBoost methods.
    [clojure.test :refer [deftest is testing]]
    [curbside.ml.models.xgboost :as xgboost]
    [curbside.ml.training-sets.conversion :as conversion]
-   [curbside.ml.utils.tests :as tutils])
+   [curbside.ml.utils.tests :as tutils]
+   [clojure.java.io :as io])
   (:import
    [java.util Arrays]
    [ml.dmlc.xgboost4j.java Booster]))
@@ -416,7 +443,7 @@ Here, the goal of the test is simply to see if we can train an xgboost model on 
                       hyperparameters))
           [v c] (alts!! [timeout-ch model-ch])]
       (is (= c model-ch))
-      (is (= Booster (type v))))))
+      (is (= Booster (type (:xgboost-model v)))))))
 #+END_SRC
 
 ** Save and load tests
@@ -428,6 +455,15 @@ Here, the goal of the test is simply to see if we can train an xgboost model on 
           model (xgboost/train tutils/dummy-regression-single-label-training-set-path hyperparameters)
           model-path (tutils/create-temp-path ".xgb")]
       (xgboost/save model model-path)
-      (is (Arrays/equals (.toByteArray model)
-                         (.toByteArray (xgboost/load model-path)))))))
+      (let [loaded-model (xgboost/load model-path)]
+        (is (= (dissoc model :xgboost-model)
+               (dissoc model :xgboost-model)))
+        (is (Arrays/equals (.toByteArray (:xgboost-model model))
+                           (.toByteArray (:xgboost-model loaded-model))))))))
+
+(deftest test-load-legacy-model
+  (testing "given a legacy dart model, when loading, then the booster is dart"
+    (is (= "dart" (:booster (xgboost/load (tutils/resource-name-to-path-str "models/dart-legacy.xgb"))))))
+  (testing "given a legacy gbtree model, when loading, then the booster is gbtree"
+    (is (= "gbtree" (:booster (xgboost/load (tutils/resource-name-to-path-str "models/gbtree-legacy.xgb")))))))
 #+END_SRC
