@@ -371,6 +371,7 @@ using standard XGBoost methods.
 
 (defn load
   [filepath]
+  {:post [(not= 0 (get-xgboost-handle (:xgboost-model %)))]} ;; On extremely rare occasions, the model loading can silently fail, resulting in a 0 model handle.
   (let [m (XGBoost/loadModel ^String filepath)]
     {:xgboost-model m
      :booster (or (get-booster-from-attributes m)
