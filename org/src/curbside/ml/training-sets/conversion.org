@@ -171,9 +171,7 @@ Where converting a training set to CSV, the order of the column is important, as
 
 (defn- parse-row-values
   [csv-row]
-  (mapv #(try (parsing/parse-double %)
-              (catch Exception _e %))
-        csv-row))
+  (mapv parsing/parse-or-identity csv-row))
 
 (defn csv-to-maps
   "Converts a csv training set to a vector of maps, where each map has the same
@@ -203,7 +201,7 @@ Where converting a training set to CSV, the order of the column is important, as
   (let [header (map name keys-in-order)
         rows (if (empty? keys-in-order)
                []
-               (mapv (apply juxt keys-in-order) maps))]
+               (map (apply juxt keys-in-order) maps))]
     (with-open [writer (io/writer output-path)]
       (csv/write-csv writer (concat [header] rows)))))
 #+END_SRC
@@ -294,9 +292,9 @@ Where converting a training set to CSV, the order of the column is important, as
     (is-csv-to-maps-conversion-valid? a-csv some-maps)
     (is-csv-to-maps-conversion-valid? a-csv-with-missing-values some-maps-with-nil-keys)
     (is-csv-to-maps-conversion-valid? a-csv-with-boolean-label
-                                      [{:label 1.0
+                                      [{:label true
                                         :a 2.0}
-                                       {:label 0.0
+                                       {:label false
                                         :a 10.0}])
     (is-csv-to-maps-conversion-valid? a-csv-with-string-labels some-maps-with-string-labels)))
 
