@@ -38,9 +38,11 @@
 
   :profiles {:uberjar {:aot :all}
              :ci {:plugins [[test2junit "1.3.3"]]}
-             :test {:resource-paths ["test-resources"]}
+             :test {:resource-paths ["test-resources"]
+                    :dependencies [[org.clojure/test.check "1.1.0"]]}
              :dev [:test
-                   {:dependencies [[org.slf4j/slf4j-simple "1.7.30"]]}]}
+                   {:dependencies [[org.slf4j/slf4j-simple "1.7.30"]
+                                   [criterium "0.4.6"]]}]}
 
   :plugins [[com.gfredericks/how-to-ns "0.1.6"]
             [lein-ancient "0.6.15"]

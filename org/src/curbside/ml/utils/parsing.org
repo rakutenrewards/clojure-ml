@@ -10,7 +10,8 @@
 - [[#handling-doublenan][Handling Double/NaN]]
 - [[#tests][Tests]]
   - [[#namespace-definition-1][Namespace definition]]
-  - [[#nan-nil-tests][nan->nil tests]]
+  - [[#parsing][Parsing]]
+  - [[#nan-nil-tests][=nan->nil= tests]]
 
 * Introduction
 
@@ -30,7 +31,7 @@ This namespace contains utilities used to parse data.
 (defn parse-double
   "Parse a string into a double. If the string is empty return nil. If it is a
   double, return it. If it is an integer, type cast it into a double and return
-  it. Else, return 0.0"
+  it."
   [s]
   (cond
     (and (string? s) (empty? s))
@@ -49,14 +50,12 @@ This namespace contains utilities used to parse data.
     0.0
 
     (string? s)
-    (Double/parseDouble s)
-
-    :else 0.0))
+    (Double/parseDouble s)))
 
 (defn parse-float
   "Parse a string into a float. If the string is empty return nil. If it is a
   double, return it. If it is an integer, type cast it into a float and return
-  it. Else, return 0.0"
+  it."
   [s]
   (cond
     (and (string? s) (empty? s))
@@ -75,9 +74,41 @@ This namespace contains utilities used to parse data.
     (float 0.0)
 
     (string? s)
-    (Float/parseFloat s)
+    (Float/parseFloat s)))
 
-    :else (float 0.0)))
+(def double-regex #"[-+]?[\d]+\.?[\d]*(?:[eE][-+]?[\d]+)?")
+(def int-regex #"[-+]?[\d]+")
+
+(defn parse-or-identity
+  "Tries to parse either a long, a double or a boolean from `s`. If `s` does not contain a
+  number, returns `s`."
+  [s]
+  (cond
+    (empty? s)
+    nil
+
+    (re-matches double-regex s)
+    (Double/parseDouble s)
+
+    (re-matches int-regex s)
+    (Long/parseLong s)
+
+    (or (= "Infinity" s) (= "+Infinity" s)) ;; Regex not used here for speed
+    Double/POSITIVE_INFINITY
+
+    (= "-Infinity" s)
+    Double/NEGATIVE_INFINITY
+
+    (= "NaN" s)
+    Double/NaN
+
+    (= "false" s)
+    false
+
+    (= "true" s)
+    true
+
+    :else s))
 #+END_SRC
 
 * Handling Double/NaN
@@ -104,10 +135,63 @@ When doing interop with Weka, some of the functions may return =Double/NaN= as a
 (ns curbside.ml.utils.parsing-test
   (:require
    [clojure.test :refer [deftest is testing]]
+   [clojure.test.check.clojure-test :refer [defspec]]
+   [clojure.test.check.properties :as prop]
+   [clojure.spec.alpha :as s]
+   [clojure.spec.gen.alpha :as gen]
    [curbside.ml.utils.parsing :as parsing]))
 #+END_SRC
 
-** nan->nil tests
+** Parsing
+
+#+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/parsing_test.clj
+(deftest test-parse-or-identity
+  (testing "parsing integer values"
+    (is (== 1 (parsing/parse-or-identity "1")))
+    (is (== -1 (parsing/parse-or-identity "-1")))
+    (is (== 123456 (parsing/parse-or-identity "+123456"))))
+
+  (testing "parsing floating point values"
+    (is (== 1.123 (parsing/parse-or-identity "1.123")))
+    (is (== -20.12 (parsing/parse-or-identity "-20.12")))
+    (is (== -150.0 (parsing/parse-or-identity "-1.5e2")))
+    (is (== 0.02 (parsing/parse-or-identity "2.0e-2")))
+    (is (== 500.0 (parsing/parse-or-identity "5e2")))
+    (is (== Double/POSITIVE_INFINITY (parsing/parse-or-identity "+Infinity")))
+    (is (== Double/POSITIVE_INFINITY (parsing/parse-or-identity "Infinity")))
+    (is (== Double/NEGATIVE_INFINITY (parsing/parse-or-identity "-Infinity")))
+    (is (Double/isNaN (parsing/parse-or-identity "NaN"))))
+
+  (testing "parsing booleans"
+    (is (true? (parsing/parse-or-identity "true")))
+    (is (false? (parsing/parse-or-identity "false"))))
+
+  (testing "parsing string as-is"
+    (letfn [(is-identity [s]
+              (is (= s (parsing/parse-or-identity s))))]
+      (is-identity "3.0f")
+      (is-identity "this is a string")
+      (is-identity "35 string starting with a number")
+      (is-identity "2018-11-27T00:00:00.000Z"))))
+
+(defspec parse-or-identity--generated-float
+  200
+  (prop/for-all [n (s/gen double?)]
+    (try
+      (let [parsed (parsing/parse-or-identity (str n))]
+        (or (and (Double/isNaN n) (Double/isNaN parsed))
+            (== n parsed)))
+      (catch Throwable _t false))))
+
+(defspec parse-or-identity--generated-int
+  200
+  (prop/for-all [n (s/gen int?)]
+    (try
+      (== n (parsing/parse-or-identity (str n)))
+      (catch Throwable _t false))))
+#+END_SRC
+
+** =nan->nil= tests
 
 #+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/parsing_test.clj
 (deftest test-nan-to-nil
