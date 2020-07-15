@@ -76,8 +76,8 @@ This namespace contains utilities used to parse data.
     (string? s)
     (Float/parseFloat s)))
 
-(def double-regex #"[-+]?[\d]+\.?[\d]*(?:[eE][-+]?[\d]+)?")
 (def int-regex #"[-+]?[\d]+")
+(def double-regex #"[-+]?[\d]+\.?[\d]*(?:[eE][-+]?[\d]+)?")
 
 (defn parse-or-identity
   "Tries to parse either a long, a double or a boolean from `s`. If `s` does not contain a
@@ -87,11 +87,11 @@ This namespace contains utilities used to parse data.
     (empty? s)
     nil
 
-    (re-matches double-regex s)
-    (Double/parseDouble s)
-
     (re-matches int-regex s)
     (Long/parseLong s)
+
+    (re-matches double-regex s)
+    (Double/parseDouble s)
 
     (or (= "Infinity" s) (= "+Infinity" s)) ;; Regex not used here for speed
     Double/POSITIVE_INFINITY
@@ -147,9 +147,9 @@ When doing interop with Weka, some of the functions may return =Double/NaN= as a
 #+BEGIN_SRC clojure :tangle ../../../../../test/curbside/ml/utils/parsing_test.clj
 (deftest test-parse-or-identity
   (testing "parsing integer values"
-    (is (== 1 (parsing/parse-or-identity "1")))
-    (is (== -1 (parsing/parse-or-identity "-1")))
-    (is (== 123456 (parsing/parse-or-identity "+123456"))))
+    (is (= 1 (parsing/parse-or-identity "1")))
+    (is (= -1 (parsing/parse-or-identity "-1")))
+    (is (= 123456 (parsing/parse-or-identity "+123456"))))
 
   (testing "parsing floating point values"
     (is (== 1.123 (parsing/parse-or-identity "1.123")))
@@ -187,7 +187,7 @@ When doing interop with Weka, some of the functions may return =Double/NaN= as a
   200
   (prop/for-all [n (s/gen int?)]
     (try
-      (== n (parsing/parse-or-identity (str n)))
+      (= n (parsing/parse-or-identity (str n)))
       (catch Throwable _t false))))
 #+END_SRC
 
