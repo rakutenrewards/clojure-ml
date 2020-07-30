@@ -191,6 +191,14 @@ Where converting a training set to CSV, the order of the column is important, as
       (= (set keys-in-order)
          (set (keys (first maps))))))
 
+(defn- ratios->doubles
+  [row]
+  (map (fn [n]
+         (if (ratio? n)
+           (double n)
+           n))
+       row))
+
 (defn maps-to-csv
   "Writes a sequence of `maps` (which are assumed to contain the same keys) to a
   CSV at `output-path`. The columns are in the order specified by
@@ -201,7 +209,9 @@ Where converting a training set to CSV, the order of the column is important, as
   (let [header (map name keys-in-order)
         rows (if (empty? keys-in-order)
                []
-               (map (apply juxt keys-in-order) maps))]
+               (->> maps
+                    (map (apply juxt keys-in-order) maps)
+                    (map ratios->doubles)))]
     (with-open [writer (io/writer output-path)]
       (csv/write-csv writer (concat [header] rows)))))
 #+END_SRC
@@ -239,15 +249,15 @@ Where converting a training set to CSV, the order of the column is important, as
   (string/join "\n"
                ["label,a,b,c"
                 "1.0,2.0,3.0,2.0"
-                "10.0,1.0,0.0,0.0\n"]))
+                "10,1,0,0\n"]))
 (def some-maps [{:b 3.0
                  :a 2.0
                  :label 1.0
                  :c 2.0}
-                {:a 1.0
-                 :b 0.0
-                 :c 0.0
-                 :label 10.0}])
+                {:a 1
+                 :b 0
+                 :c 0
+                 :label 10}])
 
 (def a-csv-with-missing-values
   (string/join "\n"
@@ -278,6 +288,13 @@ Where converting a training set to CSV, the order of the column is important, as
                                     :a 2.0}
                                    {:label "dog"
                                     :a 10.0}])
+
+(def some-maps-with-ratios
+  [{:a (/ 1 4)
+    :label (/ 1 2)}])
+
+(def a-csv-with-ratios-converted-to-doubles
+  "label,a\n0.5,0.25\n")
 
 (defn is-csv-to-maps-conversion-valid?
   [csv-content expected-maps]
@@ -317,6 +334,9 @@ Where converting a training set to CSV, the order of the column is important, as
                                       [:label :a :b :c])
     (is-maps-to-csv-conversion-valid? a-csv-with-string-labels
                                       some-maps-with-string-labels
+                                      [:label :a])
+    (is-maps-to-csv-conversion-valid? a-csv-with-ratios-converted-to-doubles
+                                      some-maps-with-ratios
                                       [:label :a])))
 #+END_SRC
 
