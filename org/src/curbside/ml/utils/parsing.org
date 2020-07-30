@@ -169,6 +169,7 @@ When doing interop with Weka, some of the functions may return =Double/NaN= as a
   (testing "parsing string as-is"
     (letfn [(is-identity [s]
               (is (= s (parsing/parse-or-identity s))))]
+      (is-identity "1/2")
       (is-identity "3.0f")
       (is-identity "this is a string")
       (is-identity "35 string starting with a number")
