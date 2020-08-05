@@ -369,10 +369,25 @@ We will define multimethods for all of these operations. These multimethods will
     (metrics/model-metrics predictor-type predictions eval-atoms)))
 
 (defn evaluate
-  "Only cross-validate method is supported at the moment."
-  [algorithm predictor-type selected-features hyperparameters training-set-path
-   & {:keys [_k-folds _multithreads _scaling-factors _feature-scaling-fns _label-scaling-fns _example-weights-path] :as options}]
-  (cross-validate algorithm predictor-type selected-features hyperparameters training-set-path options))
+  "Either cross validation or validation using a held out test set"
+  [algorithm predictor-type selected-features hyperparameters training-set-path evaluate-options
+   & {:keys [_multithreads _scaling-factors _feature-scaling-fns _label-scaling-fns _example-weights-path] :as options}]
+  (let [evaluate-type (:type evaluate-options)]
+    (case evaluate-type
+      :train-test-split (train-test-split-validate algorithm
+                                                   predictor-type
+                                                   selected-features
+                                                   hyperparameters
+                                                   training-set-path
+                                                   (:train-split-percentage evaluate-options)
+                                                   options)
+      :k-fold (cross-validate algorithm
+                  predictor-type
+                  selected-features
+                  hyperparameters
+                  training-set-path
+                  (assoc options :k-folds (:folds evaluate-options)
+                  :multithreads (:multithreads evaluate-options))))))
 #+END_SRC
 
 * Hyperparameters optimization
