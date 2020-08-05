@@ -265,7 +265,7 @@ We will define multimethods for all of these operations. These multimethods will
   [actual predicted]
   (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
 
-(defn- evaluate-fold
+(defn- train-and-evaluate
   [algorithm selected-features hyperparameters feature-scaling-fns label-scaling-fns scaling-factors
    training-csv-path training-weights-path validation-set
    eval-atoms predictor-type predictions]
@@ -307,6 +307,45 @@ We will define multimethods for all of these operations. These multimethods will
           weights)))
     (repeat (count training-set) ["1.0"])))
 
+(defn- train-test-split-validate
+  "Evaluate the performance of a model using a held out test set validation.
+  Takes a training set CSV file as input and the percentage of data to be used
+  for training the model, rest of the data is used for validating."
+  [algorithm predictor-type selected-features hyperparameters training-set-path
+   {:as _options :keys [train-split-percentage scaling-factors feature-scaling-fns
+                        label-scaling-fns example-weights-path]}]
+  {:pre [(some #{:classification :regression} #{predictor-type})]}
+  (let[[header & training-set] (with-open [in-file (io/reader training-set-path)]
+                                  (doall
+                                    (csv/read-csv in-file)))
+        weights (load-weights training-set example-weights-path)
+        total-length (count training-set)
+        train-set-size (Math/ceil (/ (* total-length train-split-percentage) 100))
+        validation-set-size (- total-length train-set-size)
+        shuffled-set (shuffle (zip training-set weights))
+        training-subset (take train-set-size shuffled-set)
+        validation-subset (take-last validation-set-size shuffled-set)
+        eval-atoms {:n (atom 0)
+                    :abs-error (atom 0)
+                    :square-error (atom 0)}
+        predictions (ArrayList.)
+        [validation-set _] (unzip validation-subset)
+        training-csv-path (to-temp-csv-path header (map (partial map first) training-subset))
+        training-weights-path (to-temp-csv-path ["weight"] (map (partial map second) training-subset))]
+        (train-and-evaluate algorithm
+                            selected-features
+                            hyperparameters
+                            feature-scaling-fns
+                            label-scaling-fns
+                            scaling-factors
+                            training-csv-path
+                            training-weights-path
+                            validation-set
+                            eval-atoms
+                            predictor-type
+                            predictions)
+    (metrics/model-metrics predictor-type predictions eval-atoms)))
+
 (defn- cross-validate
   "Evaluate the performance of a model using k-fold cross-validation. Takes a
   training set CSV file as input and the number of `k-folds` to use for the
@@ -316,8 +355,7 @@ We will define multimethods for all of these operations. These multimethods will
    {:as _options :keys [k-folds multithreads scaling-factors feature-scaling-fns
                         label-scaling-fns example-weights-path]}]
   {:pre [(some #{:classification :regression} #{predictor-type})]}
-  (let [k-folds (or k-folds 10)
-        multithreads (or multithreads false)
+  (let [multithreads (or multithreads false)
         [header & training-set] (with-open [in-file (io/reader training-set-path)]
                                   (doall
                                    (csv/read-csv in-file)))
@@ -335,30 +373,30 @@ We will define multimethods for all of these operations. These multimethods will
             training-weights-path (to-temp-csv-path ["weight"] (apply concat (map (partial map second) training-set-folds)))]
         (when (<= processed-folds k-folds)
           (if multithreads
-            (swap! futures conj (future (evaluate-fold algorithm
-                                                       selected-features
-                                                       hyperparameters
-                                                       feature-scaling-fns
-                                                       label-scaling-fns
-                                                       scaling-factors
-                                                       training-csv-path
-                                                       training-weights-path
-                                                       validation-set
-                                                       eval-atoms
-                                                       predictor-type
-                                                       predictions)))
-            (evaluate-fold algorithm
-                           selected-features
-                           hyperparameters
-                           feature-scaling-fns
-                           label-scaling-fns
-                           scaling-factors
-                           training-csv-path
-                           training-weights-path
-                           validation-set
-                           eval-atoms
-                           predictor-type
-                           predictions))
+            (swap! futures conj (future (train-and-evaluate algorithm
+                                                            selected-features
+                                                            hyperparameters
+                                                            feature-scaling-fns
+                                                            label-scaling-fns
+                                                            scaling-factors
+                                                            training-csv-path
+                                                            training-weights-path
+                                                            validation-set
+                                                            eval-atoms
+                                                            predictor-type
+                                                            predictions)))
+            (train-and-evaluate algorithm
+                                selected-features
+                                hyperparameters
+                                feature-scaling-fns
+                                label-scaling-fns
+                                scaling-factors
+                                training-csv-path
+                                training-weights-path
+                                validation-set
+                                eval-atoms
+                                predictor-type
+                                predictions))
           (recur (inc processed-folds)
                  (unzip (first training-set-folds))
                  (conj (rest training-set-folds) (zip validation-set validation-weights))))))
@@ -379,8 +417,7 @@ We will define multimethods for all of these operations. These multimethods will
                                                    selected-features
                                                    hyperparameters
                                                    training-set-path
-                                                   (:train-split-percentage evaluate-options)
-                                                   options)
+                                                   (into options evaluate-options))
       :k-fold (cross-validate algorithm
                   predictor-type
                   selected-features
@@ -515,8 +552,8 @@ The supported hyperparameter search functions are the following:
 (defn optimize-hyperparameters
   "This function is responsible for training a model with the best
   hyperparameters found by the provided `hyperparameter-search-fn`."
-  [algorithm predictor-type selected-features hardcoded-hyperparameters hyperparameter-search-fn hyperparameter-search-space training-set-path
-   & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns
+  [algorithm predictor-type selected-features hardcoded-hyperparameters hyperparameter-search-fn hyperparameter-search-space training-set-path evaluate-options
+   & {:keys [selection-metric threads-pool scaling-factors feature-scaling-fns
              label-scaling-fns example-weights-path]}]
   {:pre [(spec/check ::algorithm algorithm)
          (spec/check ::predictor-type predictor-type)
@@ -525,7 +562,6 @@ The supported hyperparameter search functions are the following:
          (spec/check ::hyperparameter-search-space hyperparameter-search-space)]}
   (let [hyperparameter-search-fn (or hyperparameter-search-fn {:type :grid})
         selection-metric (or selection-metric :root-mean-square-error)
-        k-folds (or k-folds 2)
         thread-count (or threads-pool 1)
         combos (case (:type hyperparameter-search-fn)
                  :grid (grid-search-combos hyperparameter-search-space)
@@ -538,8 +574,8 @@ The supported hyperparameter search functions are the following:
                                       selected-features
                                       hyperparameters
                                       training-set-path
+                                      evaluate-options
                                       :scaling-factors scaling-factors
-                                      :k-folds k-folds
                                       :feature-scaling-fns feature-scaling-fns
                                       :label-scaling-fns label-scaling-fns
                                       :example-weights-path example-weights-path)]
@@ -605,13 +641,15 @@ First, we setup some values that will be used in the tests
       (let [hyperparameters {:eval_metric "mae" :booster "dart"}
             hyperparameter-search-space-grid {:subsample [0.5 0.6] :max_depth [5 6 7]}
             hyperparameter-search-fn {:type :grid}
+            evaluate-options {:type :k-fold :folds 2}
             {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
                                                                                         :regression
                                                                                         ["lat" "lng"]
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-grid
-                                                                                        tutils/dummy-regression-single-label-training-set-path)]
+                                                                                        tutils/dummy-regression-single-label-training-set-path
+                                                                                        evaluate-options)]
         (verify-call-times-for models/grid-search-combos 1)
         (verify-first-call-args-for models/grid-search-combos hyperparameter-search-space-grid)
         (is (tutils/approx= 0.6 (:subsample optimal-params) 1e-1))
@@ -624,18 +662,41 @@ First, we setup some values that will be used in the tests
     (tutils/stubbing-private [models/random-search-combos random-search-combos-stub-value]
       (let [hyperparameters {:eval_metric "mae" :booster "dart"}
             hyperparameter-search-fn {:type :random :iteration-count 10}
+            evaluate-options {:type :k-fold :folds 2}
             {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
                                                                                         :regression
                                                                                         ["lat" "lng"]
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-random
-                                                                                        tutils/dummy-regression-single-label-training-set-path)]
+                                                                                        tutils/dummy-regression-single-label-training-set-path
+                                                                                        evaluate-options)]
         (verify-call-times-for models/random-search-combos 1)
         (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
-        (println optimal-params)
         (is (tutils/approx= 0.9486 (:subsample optimal-params) 1e-4))
         (is (= {:subsample 0.9486528438903652 :max_depth 6 :booster "dart" :eval_metric "mae"} optimal-params))
         (is (tutils/approx= 0.0277 (:mean-absolute-error model-evaluations) 1e-4))
         (is (tutils/approx= 0.0277 (:root-mean-square-error model-evaluations) 1e-4))))))
+
+(deftest test-optimize-train-test-validation-split
+  (testing "Check if train-test-split validation works properly, and generates models"
+    (with-redefs [shuffle (fn [x] x)]
+      (tutils/stubbing-private [models/random-search-combos random-search-combos-stub-value]
+        (let [hyperparameters {:eval_metric "mae" :booster "dart"}
+              hyperparameter-search-fn {:type :random :iteration-count 10}
+              evaluate-options {:type :train-test-split :train-split-percentage 80}
+              {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
+                                                                                          :regression
+                                                                                          ["lat" "lng"]
+                                                                                          hyperparameters
+                                                                                          hyperparameter-search-fn
+                                                                                          hyperparameter-search-space-random
+                                                                                          tutils/dummy-regression-single-label-training-set-path
+                                                                                          evaluate-options)]
+          (verify-call-times-for models/random-search-combos 1)
+          (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
+          (is (tutils/approx= 0.9486 (:subsample optimal-params) 1e-4))
+          (is (= {:subsample 0.9486528438903652 :max_depth 6 :booster "dart" :eval_metric "mae"} optimal-params))
+          (is (tutils/approx= 0.01873 (:mean-absolute-error model-evaluations) 1e-4))
+          (is (tutils/approx= 0.01873 (:root-mean-square-error model-evaluations) 1e-4)))))))
 #+END_SRC
