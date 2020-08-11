@@ -29,10 +29,8 @@ The =model= namespace offers the following interface, based on the provided algo
 
 We use [[lein-release][https://github.com/relaynetwork/lein-release]] to release artifacts to Artifactory. To use:
 
-1. Export =ARTIFACTORY_USER= and =ARTIFACTORY_PASS=. You can find the values for these in =eng.json= in =curbside-secrets=.
+1. Export =GITHUB_ACTOR= and =GITHUB_TOKEN=. You can generate a token from your own account settings with the =write:packages= permission.
 2. Make sure you are on the master branch, and that its remote branch is set to the primary source repository (https://github.com/Curbside/curbside-clojure-ml).
 3. Make sure that your code is detangled correctly from org files with =make clean && make tangle=
-4. Make sure your GPG key is setup correctly on your GitHub account
-5. Ensure that =pgp-agent= has your password cached so you don't need to be prompted. =lein release/deploy= sometimes malfunctions if it is interrupted by the pgp prompt.
-6. We use [[semantic versioning][https://semver.org]] to describe releases, so make sure to update the version accordingly in =project.clj=
-7. Release a new version with =lein deploy releases= or deploy a snapshot with =lein deploy snapshots=
+4. We use [[semantic versioning][https://semver.org]] to describe releases, so make sure to update the version accordingly in =project.clj=
+5. Release a new version with =lein deploy release=

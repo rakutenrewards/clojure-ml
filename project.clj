@@ -55,14 +55,10 @@
               :align-clauses? false
               :import-square-brackets? false}
 
-  :deploy-repositories [["releases"
-                         {:url "https://curbside.jfrog.io/curbside/libs-release-local/"
-                          :username :env/artifactory_user
-                          :password :env/artifactory_pass}]
-                        ["snapshots"
-                         {:url "https://curbside.jfrog.io/curbside/libs-snapshot-local/"
-                          :username :env/artifactory_user
-                          :password :env/artifactory_pass}]]
+  :deploy-repositories [["release" {:url "https://maven.pkg.github.com/RakutenReady/curbside-clojure-ml"
+                                    :username :env/github_actor
+                                    :password :env/github_token
+                                    :sign-releases false}]]
 
   :test2junit-output-dir "test-reports"
 
