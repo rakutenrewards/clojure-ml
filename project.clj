@@ -55,7 +55,7 @@
               :align-clauses? false
               :import-square-brackets? false}
 
-  :deploy-repositories [["release" {:url "https://maven.pkg.github.com/RakutenReady/curbside-clojure-ml"
+  :deploy-repositories [["releases" {:url "https://maven.pkg.github.com/RakutenReady/curbside-clojure-ml"
                                     :username :env/github_actor
                                     :password :env/github_token
                                     :sign-releases false}]]
