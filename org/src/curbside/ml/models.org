@@ -409,7 +409,6 @@ The supported hyperparameter search functions are the following:
    allow us to achieve comparable results to grid search much faster due to lesser number of iterations (depending on the number of combinations tried in grid search and iteration count).
 
 #+BEGIN_SRC clojure
-(s/def ::multithreads boolean?)
 
 (def supported-evaluate-types #{:train-test-split :k-fold})
 
@@ -430,8 +429,7 @@ The supported hyperparameter search functions are the following:
 
 (defmethod evaluate-spec :k-fold [_]
   (s/merge ::evaluate-common
-           (s/keys :req-un [::folds]
-                   :opt-un [::multithreads])))
+           (s/keys :req-un [::folds])))
 
 (s/def ::evaluate (s/multi-spec evaluate-spec :type))
 
