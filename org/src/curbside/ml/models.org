@@ -619,7 +619,8 @@ The supported hyperparameter search functions are the following:
    [clojure.test :refer [deftest is testing]]
    [curbside.ml.models :as models]
    [conjure.core :refer [stubbing verify-call-times-for verify-first-call-args-for]]
-   [curbside.ml.utils.tests :as tutils]))
+   [curbside.ml.utils.tests :as tutils]
+   [curbside.ml.training-sets.conversion :as conversion]))
 #+END_SRC
 
 ** Hyperparameter optimization tests
@@ -714,4 +715,32 @@ First, we setup some values that will be used in the tests
           (is (= {:subsample 0.9486528438903652 :max_depth 6 :booster "dart" :eval_metric "mae"} optimal-params))
           (is (tutils/approx= 0.01873 (:mean-absolute-error model-evaluations) 1e-4))
           (is (tutils/approx= 0.01873 (:root-mean-square-error model-evaluations) 1e-4)))))))
+
+(deftest test-train-test-split
+  (testing "given a dataset, check if proper splits are generated using train-test-split")
+  (let [training-set-path tutils/dummy-regression-single-label-training-set-path
+        example-weights tutils/dummy-example-weights-path
+        train-split-percentage 80
+        current-split (first (#'curbside.ml.models/train-test-split training-set-path example-weights train-split-percentage))
+        training-set-length (count (conversion/csv-to-maps (:training-csv-path current-split)))
+        training-weights-length (count (conversion/csv-to-maps (:training-weights-path current-split)))
+        validation-set-length (count (:validation-set current-split))]
+    (is (= training-set-length 9))
+    (is (= training-weights-length 9))
+    (is (= validation-set-length 2))))
+
+(deftest test-k-fold-split
+  (testing "given a dataset, check if proper splits are generated")
+  (let [training-set-path tutils/dummy-regression-single-label-training-set-path
+        example-weights tutils/dummy-example-weights-path
+        folds 5
+        all-splits (#'curbside.ml.models/k-fold-split training-set-path example-weights folds)]
+    (is (= (count all-splits) folds))
+    (doseq [current-split all-splits]
+                 (let [training-set-length (count (conversion/csv-to-maps (:training-csv-path current-split)))
+                       training-weights-length (count (conversion/csv-to-maps (:training-weights-path current-split)))
+                       validation-set-length (count (:validation-set current-split))]
+                   (is (= training-set-length 8))
+                   (is (= training-weights-length 8))
+                   (is (= validation-set-length 3))))))
 #+END_SRC
