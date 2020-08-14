@@ -1,23 +1,3 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../../test/curbside/ml/utils/tests.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
-#+OPTIONS: toc:2
-
-#+TITLE: Test Utilities
-
-* Table of Contents                                             :toc:noexport:
-- [[#introduction][Introduction]]
-  - [[#namespace-definition][Namespace Definition]]
-- [[#file-utilities][File utilities]]
-- [[#training-set-utilities][Training set utilities]]
-- [[#numeric-equality][Numeric Equality]]
-
-* Introduction
-
-This file contains utility functions for testing purposes.
-
-** Namespace Definition
-
-#+NAME: test-fixtures namespace
-#+BEGIN_SRC clojure
 (ns curbside.ml.utils.tests
   (:require
    [clojure.data.csv :as csv]
@@ -26,11 +6,7 @@ This file contains utility functions for testing purposes.
    [clojure.java.io :as io])
   (:import
    [java.io File]))
-#+END_SRC
 
-* File utilities
-
-#+BEGIN_SRC clojure
 (defn create-temp-path
   [extension]
   (let [file (doto (File/createTempFile "test_" extension)
@@ -53,32 +29,16 @@ This file contains utility functions for testing purposes.
 (defn resource-name-to-path-str
   [r]
   (.getPath (io/resource r)))
-#+END_SRC
 
-* Training set utilities
-
-Here, we load training sets from resources.
-
-#+BEGIN_SRC clojure
 (def dummy-regression-single-label-training-set-path
   (io/resource "training-sets/dummy-regression-single-label.csv"))
 
 (def dummy-example-weights-path (io/resource "training-sets/dummy-weights.csv"))
-#+END_SRC
 
-* Numeric Equality
-
-#+BEGIN_SRC clojure
 (defn approx=
   [x y tolerance]
   (< (Math/abs (- x y)) tolerance))
-#+END_SRC
 
-* Conjure extension
-
-These Conjure extensions allow to mock and stub private functions. They have been initially developed in curbside-analytics.
-
-#+BEGIN_SRC clojure
 (defmacro stubbing-private
   "Allows using Conjure's `stubbing` macro with private definitions."
   [bindings & body]
@@ -90,4 +50,3 @@ These Conjure extensions allow to mock and stub private functions. They have bee
          (conjure/stubbing ~(vec (interleave defnames stubbing))
            (with-redefs ~(vec (interleave privates defnames))
              ~@(walk/postwalk-replace (zipmap privates defnames) body))))))
-#+END_SRC

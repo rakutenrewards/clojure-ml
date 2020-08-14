@@ -1,24 +1,8 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/models/linear_svm.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
-#+OPTIONS: toc:2
-
-#+TITLE: Linear SVM Models
-
-* Table of Contents                                             :toc:noexport:
-- [[#introduction][Introduction]]
-  - [[#namespace-definition][Namespace Definition]]
-- [[#train][Train]]
-- [[#save][Save]]
-- [[#load][Load]]
-- [[#predict][Predict]]
-
-* Introduction
-
-The linear SVM classifier is geared to handle large-scale linear classification with sparse features matrix. It supports logistic regression and linear support vector machines. The linear SVM classifier uses the [[https://www.csie.ntu.edu.tw/~cjlin/liblinear/][LIBLINEAR]] library.
-
-** Namespace Definition
-
-#+BEGIN_SRC clojure
 (ns curbside.ml.models.linear-svm
+  "The linear SVM classifier is geared to handle large-scale linear
+   classification with sparse features matrix. It supports logistic regression
+   and linear support vector machines. The linear SVM classifier uses the
+   [https://www.csie.ntu.edu.tw/~cjlin/liblinear/](LIBLINEAR) library."
   (:refer-clojure :exclude [load])
   (:require
    [clojure.java.io :as io]
@@ -27,27 +11,7 @@ The linear SVM classifier is geared to handle large-scale linear classification 
   (:import
    (java.io File)
    (de.bwaldvogel.liblinear Linear SolverType Problem Parameter Model FeatureNode)))
-#+END_SRC
 
-* Train
-
-One important parameter of linear svm models is the =weights= that should be leveraged if the training set is unbalanced. An unbalanced training set is one where there are many more of one class than another one. In these cases, we have to weight the class that is unbalanced to rebalance the training set accordingly. This is useful for training classifier using unbalanced input data or with asymmetric misclassification cost.
-
-The =weights= parameter is a map where the keys are the labels of the classifier and where the value is the weight modifier to apply to the =c= parameter. In a binary classifier, the map would looks like:
-
-#+BEGIN_SRC clojure :tangle no
-
-{
-  0 1.0
-  1 3.0
-}
-
-#+END_SRC
-
-The two keys are the classes' labels. Then the weight modifier for each of these classes. A modifier of =1= means that nothing get modified. If a label is missing in the map, then =1= is used by default. In this example, the class =0= is unaffected and the class =1= is affected by \(C * 3.0\)
-
-#+NAME: linear svm training
-#+BEGIN_SRC clojure
 (s/def ::c (s/double-in :infinite? false :NaN? false))
 (s/def ::p (s/double-in :infinite? false :NaN? false))
 (s/def ::algorithm #{"l2lr-primal"
@@ -118,33 +82,18 @@ The two keys are the classes' labels. Then the weight modifier for each of these
 (defn train
   [training-set-csv-path hyperparameters]
   (Linear/train (problem training-set-csv-path) (parameters hyperparameters)))
-#+END_SRC
 
-* Save
-
-#+NAME: save model
-#+BEGIN_SRC clojure
 (defn save
   [model filepath]
   (with-open [out-file (io/writer filepath)]
     (Linear/saveModel out-file ^Model model)
     [filepath]))
-#+END_SRC
 
-* Load
-
-#+NAME: load model
-#+BEGIN_SRC clojure
 (defn load
   [filepath-or-bytes]
   (with-open [reader (io/reader filepath-or-bytes)]
     (Linear/loadModel reader)))
-#+END_SRC
 
-* Predict
-
-#+NAME: predict
-#+BEGIN_SRC clojure
 (defn- create-feature-node
   "Create a FeatureNode at `index` with `value`. If `value` is empty then it
   returns nil otherwise it returns the FeatureNode"
@@ -161,4 +110,3 @@ The two keys are the classes' labels. Then the weight modifier for each of these
                   (->> feature-vector
                        (keep-indexed create-feature-node)
                        into-array)))
-#+END_SRC

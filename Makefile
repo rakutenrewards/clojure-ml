@@ -1,4 +1,3 @@
-# tangled source
 SRC_DIR = src
 TEST_SRC_DIR = test
 
@@ -15,13 +14,7 @@ lint:
 lint-fix:
 	lein cljfmt fix
 
-.PHONY: tangle
-tangle:
-	@echo "Generating source files from org files..."
-	emacs -Q --batch --eval "(progn (load-file \"tangle-all.el\") (tangle-dir \"org\"))"
-
 .PHONY: code-quality-check
-code-quality-check: tangle
 code-quality-check:
 	lein eastwood
 
@@ -30,6 +23,5 @@ test:
 	lein test
 
 .PHONY: test-jenkins
-test-jenkins: tangle
 test-jenkins:
 	lein trampoline with-profile ci test2junit
