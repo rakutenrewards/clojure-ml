@@ -374,33 +374,34 @@ We will define multimethods for all of these operations. These multimethods will
 (defn evaluate
   "Either cross validation or validation using a held out test set"
   [algorithm predictor-type selected-features hyperparameters training-set-path evaluate-options selection-metric
-   & {:keys [multithreads scaling-factors label-scaling-fns example-weights-path]}]
-  (let [splits-to-evaluate (create-train-validate-splits evaluate-options training-set-path example-weights-path)
-        list-of-models-and-eval-metrics (if multithreads
-                                          (let [train-and-evaluate-functions (for [current-split splits-to-evaluate]
-                                                                               (future (train-and-evaluate algorithm
-                                                                                                           selected-features
-                                                                                                           hyperparameters
-                                                                                                           label-scaling-fns
-                                                                                                           scaling-factors
-                                                                                                           (:training-csv-path current-split)
-                                                                                                           (:training-weights-path current-split)
-                                                                                                           (:validation-set current-split)
-                                                                                                           predictor-type)))]
-                                            (for [f train-and-evaluate-functions] @f))
-                                          (for [current-split splits-to-evaluate] (train-and-evaluate algorithm
-                                                                                                      selected-features
-                                                                                                      hyperparameters
-                                                                                                      label-scaling-fns
-                                                                                                      scaling-factors
-                                                                                                      (:training-csv-path current-split)
-                                                                                                      (:training-weights-path current-split)
-                                                                                                      (:validation-set current-split)
-                                                                                                      predictor-type)))
+   & {:keys [scaling-factors label-scaling-fns example-weights-path]}]
+  (let [multithreads (:multithreads evaluate-options)
+        splits-to-evaluate (create-train-validate-splits evaluate-options training-set-path example-weights-path)
+        models-and-metrics (if multithreads
+                             (let [functions (for [current-split splits-to-evaluate]
+                                               (future (train-and-evaluate algorithm
+                                                                           selected-features
+                                                                           hyperparameters
+                                                                           label-scaling-fns
+                                                                           scaling-factors
+                                                                           (:training-csv-path current-split)
+                                                                           (:training-weights-path current-split)
+                                                                           (:validation-set current-split)
+                                                                           predictor-type)))]
+                               (for [f functions] @f))
+                             (for [current-split splits-to-evaluate] (train-and-evaluate algorithm
+                                                                                         selected-features
+                                                                                         hyperparameters
+                                                                                         label-scaling-fns
+                                                                                         scaling-factors
+                                                                                         (:training-csv-path current-split)
+                                                                                         (:training-weights-path current-split)
+                                                                                         (:validation-set current-split)
+                                                                                         predictor-type)))
         find-best (if (= (metrics/comparator selection-metric) <)
                     min-key
                     max-key)
-        individual-model-metrics (for [model-and-metric list-of-models-and-eval-metrics]
+        individual-model-metrics (for [model-and-metric models-and-metrics]
                                    (merge {:model (:model model-and-metric)}
                                           (metrics/model-metrics predictor-type model-and-metric)))
         best-evaluation (apply find-best selection-metric individual-model-metrics)
@@ -414,13 +415,13 @@ We will define multimethods for all of these operations. These multimethods will
                                     :square-error 0
                                     :n            0
                                     :predictions  []}
-                                   (for [model-and-metrics list-of-models-and-eval-metrics]
-                                     [(:abs-error model-and-metrics)
-                                      (:square-error model-and-metrics)
-                                      (:n model-and-metrics)
-                                      (:predictions model-and-metrics)]))]
-    (doseq [model-and-metrics list-of-models-and-eval-metrics]
-      (dispose algorithm (:model model-and-metrics)))
+                                   (for [result-map models-and-metrics]
+                                     [(:abs-error result-map)
+                                      (:square-error result-map)
+                                      (:n result-map)
+                                      (:predictions result-map)]))]
+    (doseq [result-map (remove #(= % best-evaluation) individual-model-metrics)]
+      (dispose algorithm (:model result-map)))
     {:model best-model :metrics (metrics/model-metrics predictor-type cumulative-metrics)}))
 #+END_SRC
 
