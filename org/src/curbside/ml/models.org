@@ -375,44 +375,26 @@ We will define multimethods for all of these operations. These multimethods will
   "Either cross validation or validation using a held out test set"
   [algorithm predictor-type selected-features hyperparameters training-set-path evaluate-options selection-metric
    & {:keys [scaling-factors label-scaling-fns example-weights-path]}]
-  (let [multithreads (:multithreads evaluate-options)
-        splits-to-evaluate (create-train-validate-splits evaluate-options training-set-path example-weights-path)
-        models-and-metrics (if multithreads
-                             (let [functions (for [current-split splits-to-evaluate]
-                                               (future (train-and-evaluate algorithm
-                                                                           selected-features
-                                                                           hyperparameters
-                                                                           label-scaling-fns
-                                                                           scaling-factors
-                                                                           (:training-csv-path current-split)
-                                                                           (:training-weights-path current-split)
-                                                                           (:validation-set current-split)
-                                                                           predictor-type)))]
-                               (for [f functions] @f))
-                             (for [current-split splits-to-evaluate] (train-and-evaluate algorithm
-                                                                                         selected-features
-                                                                                         hyperparameters
-                                                                                         label-scaling-fns
-                                                                                         scaling-factors
-                                                                                         (:training-csv-path current-split)
-                                                                                         (:training-weights-path current-split)
-                                                                                         (:validation-set current-split)
-                                                                                         predictor-type)))
-        cumulative-metrics (reduce (fn [agg [abs-error square-error n predictions]]
-                                     (-> agg (update :abs-error #(+ % abs-error))
-                                         (update :square-error #(+ % square-error))
-                                         (update :n #(+ % n))
-                                         (update :predictions #(concat % predictions))))
-                                   {:abs-error    0
-                                    :square-error 0
-                                    :n            0
-                                    :predictions  []}
-                                   (for [result-map models-and-metrics]
-                                     [(:abs-error result-map)
-                                      (:square-error result-map)
-                                      (:n result-map)
-                                      (:predictions result-map)]))]
-    (metrics/model-metrics predictor-type cumulative-metrics)))
+  (let [splits-to-evaluate (create-train-validate-splits evaluate-options training-set-path example-weights-path)
+        metrics (->> splits-to-evaluate
+                     (pmap (fn [{:keys [training-csv-path training-weights-path validation-set]}]
+                             (train-and-evaluate algorithm
+                                                 selected-features
+                                                 hyperparameters
+                                                 label-scaling-fns
+                                                 scaling-factors
+                                                 training-csv-path
+                                                 training-weights-path
+                                                 validation-set
+                                                 predictor-type)))
+                     (doall)
+                     (reduce (fn [agg {:keys [abs-error square-error n predictions]}]
+                               (-> agg
+                                   (update :abs-error + abs-error)
+                                   (update :square-error + square-error)
+                                   (update :n #(+ % n))
+                                   (update :predictions concat predictions)))))]
+    (metrics/model-metrics predictor-type metrics)))
 #+END_SRC
 
 * Hyperparameters optimization
