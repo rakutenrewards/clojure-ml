@@ -299,9 +299,9 @@ We will define multimethods for all of these operations. These multimethods will
    training-csv-path training-weights-path validation-set predictor-type]
   (let [model (train algorithm predictor-type training-csv-path hyperparameters training-weights-path)
         evaluation_result (evaluate-using-model model algorithm selected-features validation-set predictor-type hyperparameters
-                                                scaling-factors label-scaling-fns)
-        result (assoc evaluation_result :model model)]
-    result))
+                                                scaling-factors label-scaling-fns)]
+    (dispose algorithm model)
+    evaluation_result))
 
 (defn- zip
   [xs ys]
@@ -398,14 +398,6 @@ We will define multimethods for all of these operations. These multimethods will
                                                                                          (:training-weights-path current-split)
                                                                                          (:validation-set current-split)
                                                                                          predictor-type)))
-        find-best (if (= (metrics/comparator selection-metric) <)
-                    min-key
-                    max-key)
-        individual-model-metrics (for [model-and-metric models-and-metrics]
-                                   (merge {:model (:model model-and-metric)}
-                                          (metrics/model-metrics predictor-type model-and-metric)))
-        best-evaluation (apply find-best selection-metric individual-model-metrics)
-        best-model (:model best-evaluation)
         cumulative-metrics (reduce (fn [agg [abs-error square-error n predictions]]
                                      (-> agg (update :abs-error #(+ % abs-error))
                                          (update :square-error #(+ % square-error))
@@ -420,9 +412,7 @@ We will define multimethods for all of these operations. These multimethods will
                                       (:square-error result-map)
                                       (:n result-map)
                                       (:predictions result-map)]))]
-    (doseq [result-map (remove #(= % best-evaluation) individual-model-metrics)]
-      (dispose algorithm (:model result-map)))
-    {:model best-model :metrics (metrics/model-metrics predictor-type cumulative-metrics)}))
+    (metrics/model-metrics predictor-type cumulative-metrics)))
 #+END_SRC
 
 * Hyperparameters optimization
@@ -593,7 +583,7 @@ The supported hyperparameter search functions are the following:
                                                hyperparameter-search-space))
         eval (fn [hyperparameters-to-optimize]
                (let [hyperparameters (merge hardcoded-hyperparameters hyperparameters-to-optimize)
-                     {:keys [model metrics]} (evaluate algorithm
+                     metrics (evaluate algorithm
                                                        predictor-type
                                                        selected-features
                                                        hyperparameters
@@ -606,8 +596,7 @@ The supported hyperparameter search functions are the following:
                                                        :example-weights-path example-weights-path)]
                  {:optimal-params hyperparameters
                   :selected-evaluation (get metrics selection-metric)
-                  :model-evaluations metrics
-                  :model model}))
+                  :model-evaluations metrics}))
         find-best (if (= (metrics/comparator selection-metric) <)
                     min-key
                     max-key)
