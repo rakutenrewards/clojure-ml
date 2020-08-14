@@ -265,27 +265,43 @@ We will define multimethods for all of these operations. These multimethods will
   [actual predicted]
   (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
 
-(defn- evaluate-fold
-  [algorithm selected-features hyperparameters feature-scaling-fns label-scaling-fns scaling-factors
-   training-csv-path training-weights-path validation-set
-   eval-atoms predictor-type predictions]
-  (let [model (train algorithm predictor-type training-csv-path hyperparameters training-weights-path)]
-    (doseq [[label & features] validation-set]
-      (let [features-map (into {} (map vector selected-features features))
-            predicted-value (infer algorithm predictor-type model selected-features hyperparameters features-map
-                                   :scaling-factors scaling-factors
-                                   :feature-scaling-fns nil ;; The features are already scaled in the training set.
-                                   :label-scaling-fns label-scaling-fns)]
-        (when (= predictor-type :classification)
-          (.add predictions (classify (Double/parseDouble label) predicted-value)))
-        (let [unscaled-label (unscale-label label-scaling-fns scaling-factors (parsing/parse-double label))
-              diff (- unscaled-label predicted-value)
-              abs-error (Math/abs diff)
-              square-error (* diff diff)]
-          (swap! (:abs-error eval-atoms) #(+ abs-error %))
-          (swap! (:square-error eval-atoms) #(+ square-error %))
-          (swap! (:n eval-atoms) inc))))
-    (dispose algorithm model)))
+(defn- evaluate-using-model
+  "Given a model and all the details about features/labels, generate evaluation metrics
+  for the given labels using the model."
+  [model algorithm selected-features validation-set predictor-type hyperparameters
+   scaling-factors label-scaling-fns]
+  (reduce (fn [agg [abs-error square-error predictions]]
+            (-> agg
+                (update :abs-error + abs-error)
+                (update :square-error + square-error)
+                (update :n inc)
+                (update :predictions conj predictions)))
+          {:abs-error 0
+           :square-error 0
+           :n 0
+           :predictions []}
+          (for [[label & features] validation-set]
+              (let [features-map (into {} (map vector selected-features features))
+                    predicted-value (infer algorithm predictor-type model selected-features hyperparameters features-map
+                                           :scaling-factors scaling-factors
+                                           :feature-scaling-fns nil ;; The features are already scaled in the training set.
+                                           :label-scaling-fns label-scaling-fns)
+                    prediction (if (= predictor-type :classification)
+                                 (classify (Double/parseDouble label) predicted-value))
+                    unscaled-label (unscale-label label-scaling-fns scaling-factors (parsing/parse-double label))
+                    diff (- unscaled-label predicted-value)
+                    abs-error (Math/abs diff)
+                    square-error (* diff diff)]
+                [abs-error square-error prediction]))))
+
+(defn- train-and-evaluate
+  [algorithm selected-features hyperparameters label-scaling-fns scaling-factors
+   training-csv-path training-weights-path validation-set predictor-type]
+  (let [model (train algorithm predictor-type training-csv-path hyperparameters training-weights-path)
+        evaluation_result (evaluate-using-model model algorithm selected-features validation-set predictor-type hyperparameters
+                                                scaling-factors label-scaling-fns)]
+    (dispose algorithm model)
+    evaluation_result))
 
 (defn- zip
   [xs ys]
@@ -307,72 +323,78 @@ We will define multimethods for all of these operations. These multimethods will
           weights)))
     (repeat (count training-set) ["1.0"])))
 
-(defn- cross-validate
-  "Evaluate the performance of a model using k-fold cross-validation. Takes a
-  training set CSV file as input and the number of `k-folds` to use for the
-  cross validation. If `multithreads` is `true`, then each fold will be
-  processed on its own thread in parallel."
-  [algorithm predictor-type selected-features hyperparameters training-set-path
-   {:as _options :keys [k-folds multithreads scaling-factors feature-scaling-fns
-                        label-scaling-fns example-weights-path]}]
-  {:pre [(some #{:classification :regression} #{predictor-type})]}
-  (let [k-folds (or k-folds 10)
-        multithreads (or multithreads false)
-        [header & training-set] (with-open [in-file (io/reader training-set-path)]
+(defn- train-test-split
+  "Produce the dataset splits between train and validate using the given % split"
+  [training-set-path example-weights-path train-split-percentage]
+  (let [[header & training-set] (with-open [in-file (io/reader training-set-path)]
+                                  (doall
+                                   (csv/read-csv in-file)))
+        weights (load-weights training-set example-weights-path)
+        total-length (count training-set)
+        train-set-size (Math/ceil (/ (* total-length train-split-percentage) 100))
+        validation-set-size (- total-length train-set-size)
+        shuffled-set (shuffle (zip training-set weights))
+        training-subset (take train-set-size shuffled-set)
+        validation-subset (take-last validation-set-size shuffled-set)
+        [validation-set _] (unzip validation-subset)
+        training-csv-path (to-temp-csv-path header (map (partial map first) training-subset))
+        training-weights-path (to-temp-csv-path ["weight"] (map (partial map second) training-subset))]
+    [{:training-weights-path training-weights-path :training-csv-path training-csv-path :validation-set validation-set}]))
+
+(defn- k-fold-split
+  "Produce the dataset splits using to do k-fold cross validation"
+  [training-set-path example-weights-path k-folds]
+  (let [[header & training-set] (with-open [in-file (io/reader training-set-path)]
                                   (doall
                                    (csv/read-csv in-file)))
         weights (load-weights training-set example-weights-path)
         folds (partition-all (/ (count training-set) k-folds) (shuffle (zip training-set weights)))
-        eval-atoms {:n (atom 0)
-                    :abs-error (atom 0)
-                    :square-error (atom 0)}
-        predictions (ArrayList.)
-        futures (atom [])]
-    (loop [processed-folds 1
-           [validation-set validation-weights] (unzip (first folds))
-           training-set-folds (rest folds)]
-      (let [training-csv-path (to-temp-csv-path header (apply concat (map (partial map first) training-set-folds)))
-            training-weights-path (to-temp-csv-path ["weight"] (apply concat (map (partial map second) training-set-folds)))]
-        (when (<= processed-folds k-folds)
-          (if multithreads
-            (swap! futures conj (future (evaluate-fold algorithm
-                                                       selected-features
-                                                       hyperparameters
-                                                       feature-scaling-fns
-                                                       label-scaling-fns
-                                                       scaling-factors
-                                                       training-csv-path
-                                                       training-weights-path
-                                                       validation-set
-                                                       eval-atoms
-                                                       predictor-type
-                                                       predictions)))
-            (evaluate-fold algorithm
-                           selected-features
-                           hyperparameters
-                           feature-scaling-fns
-                           label-scaling-fns
-                           scaling-factors
-                           training-csv-path
-                           training-weights-path
-                           validation-set
-                           eval-atoms
-                           predictor-type
-                           predictions))
-          (recur (inc processed-folds)
-                 (unzip (first training-set-folds))
-                 (conj (rest training-set-folds) (zip validation-set validation-weights))))))
-    (when multithreads
-      (doseq [f @futures]
-        @f))
+        evaluation-splits   (loop [processed-folds 1
+                                   [validation-set validation-weights] (unzip (first folds))
+                                   training-set-folds (rest folds)
+                                   result []]
+                              (if (<= processed-folds k-folds)
+                                (let [training-csv-path (to-temp-csv-path header (apply concat (map (partial map first) training-set-folds)))
+                                      training-weights-path (to-temp-csv-path ["weight"] (apply concat (map (partial map second) training-set-folds)))]
+                                  (recur (inc processed-folds)
+                                         (unzip (first training-set-folds))
+                                         (conj (rest training-set-folds) (zip validation-set validation-weights))
+                                         (conj result {:training-weights-path training-weights-path :training-csv-path training-csv-path :validation-set validation-set})))
+                                result))]
+    evaluation-splits))
 
-    (metrics/model-metrics predictor-type predictions eval-atoms)))
+(defn- create-train-validate-splits
+  "Given a dataset and the type of split to be used, produce a vector of train and
+  validation sets to be evaluated."
+  [evaluate-options training-set-path example-weights-path]
+  (case (:type evaluate-options)
+    :train-test-split (train-test-split training-set-path example-weights-path (:train-split-percentage evaluate-options))
+    :k-fold (k-fold-split training-set-path example-weights-path (:folds evaluate-options))))
 
 (defn evaluate
-  "Only cross-validate method is supported at the moment."
-  [algorithm predictor-type selected-features hyperparameters training-set-path
-   & {:keys [_k-folds _multithreads _scaling-factors _feature-scaling-fns _label-scaling-fns _example-weights-path] :as options}]
-  (cross-validate algorithm predictor-type selected-features hyperparameters training-set-path options))
+  "Either cross validation or validation using a held out test set"
+  [algorithm predictor-type selected-features hyperparameters training-set-path evaluate-options selection-metric
+   & {:keys [scaling-factors label-scaling-fns example-weights-path]}]
+  (let [splits-to-evaluate (create-train-validate-splits evaluate-options training-set-path example-weights-path)
+        metrics (->> splits-to-evaluate
+                     (pmap (fn [{:keys [training-csv-path training-weights-path validation-set]}]
+                             (train-and-evaluate algorithm
+                                                 selected-features
+                                                 hyperparameters
+                                                 label-scaling-fns
+                                                 scaling-factors
+                                                 training-csv-path
+                                                 training-weights-path
+                                                 validation-set
+                                                 predictor-type)))
+                     (doall)
+                     (reduce (fn [agg {:keys [abs-error square-error n predictions]}]
+                               (-> agg
+                                   (update :abs-error + abs-error)
+                                   (update :square-error + square-error)
+                                   (update :n #(+ % n))
+                                   (update :predictions concat predictions)))))]
+    (metrics/model-metrics predictor-type metrics)))
 #+END_SRC
 
 * Hyperparameters optimization
@@ -387,6 +409,32 @@ The supported hyperparameter search functions are the following:
    allow us to achieve comparable results to grid search much faster due to lesser number of iterations (depending on the number of combinations tried in grid search and iteration count).
 
 #+BEGIN_SRC clojure
+(s/def ::multithreads boolean?)
+
+(def supported-evaluate-types #{:train-test-split :k-fold})
+
+(s/def :evaluate/type supported-evaluate-types)
+
+(s/def ::evaluate-common
+  (s/keys :req-un [:evaluate/type]))
+
+(defmulti evaluate-spec :type)
+
+(s/def ::train-split-percentage (s/int-in 1 99))
+
+(s/def ::folds (s/int-in 1 Integer/MAX_VALUE))
+
+(defmethod evaluate-spec :train-test-split [_]
+  (s/merge ::evaluate-common
+           (s/keys :req-un [::train-split-percentage])))
+
+(defmethod evaluate-spec :k-fold [_]
+  (s/merge ::evaluate-common
+           (s/keys :req-un [::folds]
+                   :opt-un [::multithreads])))
+
+(s/def ::evaluate (s/multi-spec evaluate-spec :type))
+
 (def supported-hyperparameter-search-fn-types #{:grid :random})
 
 (s/def :hyperparameter-search-fn/type supported-hyperparameter-search-fn-types)
@@ -403,8 +451,8 @@ The supported hyperparameter search functions are the following:
 
 (defmethod hyperparameter-search-fn :random [_]
   (s/merge
-    ::hyperparameter-search-fn-common
-    (s/keys :req-un [::iteration-count])))
+   ::hyperparameter-search-fn-common
+   (s/keys :req-un [::iteration-count])))
 
 (s/def ::hyperparameter-search-fn (s/multi-spec hyperparameter-search-fn :type))
 
@@ -422,41 +470,41 @@ The supported hyperparameter search functions are the following:
 (s/def :decimal/min (s/double-in :infinite? false :NaN? false))
 (s/def :decimal/max (s/double-in :infinite? false :NaN? false))
 (s/def ::random-search-space-dimension-decimal (s/and (s/keys :req-un [:decimal/min :decimal/max])
-                                                   (fn [{:keys [min max]}] (< min max))))
+                                                      (fn [{:keys [min max]}] (< min max))))
 
 (s/def :integer/min (s/int-in Integer/MIN_VALUE Integer/MAX_VALUE))
 (s/def :integer/max (s/int-in Integer/MIN_VALUE Integer/MAX_VALUE))
 (s/def ::random-search-space-dimension-integer (s/and (s/keys :req-un [:integer/min :integer/max])
-                                                   (fn [{:keys [min max]}] (< min max))))
+                                                      (fn [{:keys [min max]}] (< min max))))
 
 (defmulti random-search-space-dimension :type)
 
 (defmethod random-search-space-dimension "integer" [_]
   (s/merge
-    ::random-search-space-dimension-integer
-    ::random-search-space-dimension-common))
+   ::random-search-space-dimension-integer
+   ::random-search-space-dimension-common))
 
 (defmethod random-search-space-dimension "decimal" [_]
   (s/merge
-    ::random-search-space-dimension-decimal
-    ::random-search-space-dimension-common))
+   ::random-search-space-dimension-decimal
+   ::random-search-space-dimension-common))
 
 (defmethod random-search-space-dimension "string" [_]
   (s/merge
-    ::random-search-space-dimension-string
-    ::random-search-space-dimension-common))
+   ::random-search-space-dimension-string
+   ::random-search-space-dimension-common))
 
 (s/def ::random-search-space-dimension (s/multi-spec random-search-space-dimension :type))
 
 (s/def ::hyperparameter-search-random-space-key-check keyword?)
 
 (s/def ::hyperparameter-search-space-random
-    (s/map-of ::hyperparameter-search-random-space-key-check ::random-search-space-dimension))
+  (s/map-of ::hyperparameter-search-random-space-key-check ::random-search-space-dimension))
 
 (s/def ::hyperparameter-search-space-grid (s/map-of keyword?
-                                               (s/coll-of (s/or :double (s/double-in :infinite? false :NaN? false)
-                                                                :integer integer?
-                                                                :string string?) :distinct true)))
+                                                    (s/coll-of (s/or :double (s/double-in :infinite? false :NaN? false)
+                                                                     :integer integer?
+                                                                     :string string?) :distinct true)))
 
 (s/def ::hyperparameter-search-space (s/or :random ::hyperparameter-search-space-random
                                            :grid ::hyperparameter-search-space-grid))
@@ -495,13 +543,13 @@ The supported hyperparameter search functions are the following:
   [iteration-count hyperparameter-search-space]
   (repeatedly iteration-count
               #(into {} (map (fn [[key value]] [key (random-value value)])
-              hyperparameter-search-space))))
+                             hyperparameter-search-space))))
 
 (defn optimize-hyperparameters
   "This function is responsible for training a model with the best
   hyperparameters found by the provided `hyperparameter-search-fn`."
-  [algorithm predictor-type selected-features hardcoded-hyperparameters hyperparameter-search-fn hyperparameter-search-space training-set-path
-   & {:keys [selection-metric k-folds threads-pool scaling-factors feature-scaling-fns
+  [algorithm predictor-type selected-features hardcoded-hyperparameters hyperparameter-search-fn hyperparameter-search-space training-set-path evaluate-options
+   & {:keys [selection-metric threads-pool scaling-factors feature-scaling-fns
              label-scaling-fns example-weights-path]}]
   {:pre [(spec/check ::algorithm algorithm)
          (spec/check ::predictor-type predictor-type)
@@ -510,27 +558,27 @@ The supported hyperparameter search functions are the following:
          (spec/check ::hyperparameter-search-space hyperparameter-search-space)]}
   (let [hyperparameter-search-fn (or hyperparameter-search-fn {:type :grid})
         selection-metric (or selection-metric :root-mean-square-error)
-        k-folds (or k-folds 2)
         thread-count (or threads-pool 1)
         combos (case (:type hyperparameter-search-fn)
                  :grid (grid-search-combos hyperparameter-search-space)
                  :random (random-search-combos (:iteration-count hyperparameter-search-fn)
-                    hyperparameter-search-space))
+                                               hyperparameter-search-space))
         eval (fn [hyperparameters-to-optimize]
                (let [hyperparameters (merge hardcoded-hyperparameters hyperparameters-to-optimize)
-                     result (evaluate algorithm
-                                      predictor-type
-                                      selected-features
-                                      hyperparameters
-                                      training-set-path
-                                      :scaling-factors scaling-factors
-                                      :k-folds k-folds
-                                      :feature-scaling-fns feature-scaling-fns
-                                      :label-scaling-fns label-scaling-fns
-                                      :example-weights-path example-weights-path)]
+                     metrics (evaluate algorithm
+                                       predictor-type
+                                       selected-features
+                                       hyperparameters
+                                       training-set-path
+                                       evaluate-options
+                                       selection-metric
+                                       :scaling-factors scaling-factors
+                                       :feature-scaling-fns feature-scaling-fns
+                                       :label-scaling-fns label-scaling-fns
+                                       :example-weights-path example-weights-path)]
                  {:optimal-params hyperparameters
-                  :selected-evaluation (get result selection-metric)
-                  :model-evaluations result}))
+                  :selected-evaluation (get metrics selection-metric)
+                  :model-evaluations metrics}))
         find-best (if (= (metrics/comparator selection-metric) <)
                     min-key
                     max-key)
@@ -553,7 +601,8 @@ The supported hyperparameter search functions are the following:
    [clojure.test :refer [deftest is testing]]
    [curbside.ml.models :as models]
    [conjure.core :refer [stubbing verify-call-times-for verify-first-call-args-for]]
-   [curbside.ml.utils.tests :as tutils]))
+   [curbside.ml.utils.tests :as tutils]
+   [curbside.ml.training-sets.conversion :as conversion]))
 #+END_SRC
 
 ** Hyperparameter optimization tests
@@ -590,13 +639,15 @@ First, we setup some values that will be used in the tests
       (let [hyperparameters {:eval_metric "mae" :booster "dart"}
             hyperparameter-search-space-grid {:subsample [0.5 0.6] :max_depth [5 6 7]}
             hyperparameter-search-fn {:type :grid}
+            evaluate-options {:type :k-fold :folds 2}
             {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
                                                                                         :regression
                                                                                         ["lat" "lng"]
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-grid
-                                                                                        tutils/dummy-regression-single-label-training-set-path)]
+                                                                                        tutils/dummy-regression-single-label-training-set-path
+                                                                                        evaluate-options)]
         (verify-call-times-for models/grid-search-combos 1)
         (verify-first-call-args-for models/grid-search-combos hyperparameter-search-space-grid)
         (is (tutils/approx= 0.6 (:subsample optimal-params) 1e-1))
@@ -609,18 +660,69 @@ First, we setup some values that will be used in the tests
     (tutils/stubbing-private [models/random-search-combos random-search-combos-stub-value]
       (let [hyperparameters {:eval_metric "mae" :booster "dart"}
             hyperparameter-search-fn {:type :random :iteration-count 10}
+            evaluate-options {:type :k-fold :folds 2}
             {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
                                                                                         :regression
                                                                                         ["lat" "lng"]
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-random
-                                                                                        tutils/dummy-regression-single-label-training-set-path)]
+                                                                                        tutils/dummy-regression-single-label-training-set-path
+                                                                                        evaluate-options)]
         (verify-call-times-for models/random-search-combos 1)
         (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
-        (println optimal-params)
         (is (tutils/approx= 0.9486 (:subsample optimal-params) 1e-4))
         (is (= {:subsample 0.9486528438903652 :max_depth 6 :booster "dart" :eval_metric "mae"} optimal-params))
         (is (tutils/approx= 0.0277 (:mean-absolute-error model-evaluations) 1e-4))
         (is (tutils/approx= 0.0277 (:root-mean-square-error model-evaluations) 1e-4))))))
+
+(deftest test-optimize-train-test-validation-split
+  (testing "Check if train-test-split validation works properly, and generates models"
+    (with-redefs [shuffle (fn [x] x)]
+      (tutils/stubbing-private [models/random-search-combos random-search-combos-stub-value]
+        (let [hyperparameters {:eval_metric "mae" :booster "dart"}
+              hyperparameter-search-fn {:type :random :iteration-count 10}
+              evaluate-options {:type :train-test-split :train-split-percentage 80}
+              {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
+                                                                                          :regression
+                                                                                          ["lat" "lng"]
+                                                                                          hyperparameters
+                                                                                          hyperparameter-search-fn
+                                                                                          hyperparameter-search-space-random
+                                                                                          tutils/dummy-regression-single-label-training-set-path
+                                                                                          evaluate-options)]
+          (verify-call-times-for models/random-search-combos 1)
+          (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
+          (is (tutils/approx= 0.9486 (:subsample optimal-params) 1e-4))
+          (is (= {:subsample 0.9486528438903652 :max_depth 6 :booster "dart" :eval_metric "mae"} optimal-params))
+          (is (tutils/approx= 0.01873 (:mean-absolute-error model-evaluations) 1e-4))
+          (is (tutils/approx= 0.01873 (:root-mean-square-error model-evaluations) 1e-4)))))))
+
+(deftest test-train-test-split
+  (testing "given a dataset, check if proper splits are generated using train-test-split")
+  (let [training-set-path tutils/dummy-regression-single-label-training-set-path
+        example-weights tutils/dummy-example-weights-path
+        train-split-percentage 80
+        current-split (first (#'curbside.ml.models/train-test-split training-set-path example-weights train-split-percentage))
+        training-set-length (count (conversion/csv-to-maps (:training-csv-path current-split)))
+        training-weights-length (count (conversion/csv-to-maps (:training-weights-path current-split)))
+        validation-set-length (count (:validation-set current-split))]
+    (is (= training-set-length 9))
+    (is (= training-weights-length 9))
+    (is (= validation-set-length 2))))
+
+(deftest test-k-fold-split
+  (testing "given a dataset, check if proper splits are generated")
+  (let [training-set-path tutils/dummy-regression-single-label-training-set-path
+        example-weights tutils/dummy-example-weights-path
+        folds 5
+        all-splits (#'curbside.ml.models/k-fold-split training-set-path example-weights folds)]
+    (is (= (count all-splits) folds))
+    (doseq [current-split all-splits]
+                 (let [training-set-length (count (conversion/csv-to-maps (:training-csv-path current-split)))
+                       training-weights-length (count (conversion/csv-to-maps (:training-weights-path current-split)))
+                       validation-set-length (count (:validation-set current-split))]
+                   (is (= training-set-length 8))
+                   (is (= training-weights-length 8))
+                   (is (= validation-set-length 3))))))
 #+END_SRC

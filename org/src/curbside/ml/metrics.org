@@ -52,34 +52,37 @@ The main metrics involved in =regression= tasks are:
    [curbside.ml.utils.parsing :as parsing]
    [curbside.ml.utils.weka :as weka])
   (:import
-   (weka.classifiers.evaluation ConfusionMatrix ThresholdCurve)
-   (weka.attributeSelection AttributeSelection
-                            CfsSubsetEval
-                            CorrelationAttributeEval
-                            GainRatioAttributeEval
-                            InfoGainAttributeEval
-                            ReliefFAttributeEval
-                            SymmetricalUncertAttributeEval
-                            OneRAttributeEval
-                            GreedyStepwise
-                            Ranker)))
+    (weka.classifiers.evaluation ConfusionMatrix ThresholdCurve)
+    (weka.attributeSelection AttributeSelection
+                             CfsSubsetEval
+                             CorrelationAttributeEval
+                             GainRatioAttributeEval
+                             InfoGainAttributeEval
+                             ReliefFAttributeEval
+                             SymmetricalUncertAttributeEval
+                             OneRAttributeEval
+                             GreedyStepwise
+                             Ranker)
+    (java.util ArrayList)))
 #+END_SRC
 
 * Model metrics
 
 #+BEGIN_SRC clojure
 (defn model-metrics
-  "Calculate all the metrics given an ArrayList of predictions. Return a map of
-  the computed metrics."
-  [predictor-type predictions eval-atoms]
-  (let [confusion-matrix (ConfusionMatrix. (into-array String ["1.0" "0.0"]))
+  "Calculate all the metrics given a map containing vector of predictions, abs-error
+  and square-error. Return a map of the computed metrics."
+  [predictor-type eval-metrics]
+  (let [{:keys [predictions abs-error square-error n]} eval-metrics
+        predictions (if (every? nil? predictions) (ArrayList. []) (ArrayList. predictions))
+        confusion-matrix (ConfusionMatrix. (into-array String ["1.0" "0.0"]))
         _ (.addPredictions confusion-matrix predictions)
         two-classes-stats (.getTwoClassStats confusion-matrix 1)
         threshold-curve (ThresholdCurve.)
         instances (.getCurve threshold-curve predictions)]
-    (merge {:mean-absolute-error (stats/mean-absolute-error @(:n eval-atoms) @(:abs-error eval-atoms))
-            :root-mean-square-error (stats/root-mean-square-error @(:n eval-atoms) @(:square-error eval-atoms))
-            :total-number-instances (double @(:n eval-atoms))}
+    (merge {:mean-absolute-error (stats/mean-absolute-error n abs-error)
+            :root-mean-square-error (stats/root-mean-square-error n square-error)
+            :total-number-instances (double n)}
            (when (= predictor-type :classification)
              {:tp (parsing/nan->nil (.getTruePositive two-classes-stats))
               :fp (parsing/nan->nil (.getFalsePositive two-classes-stats))
