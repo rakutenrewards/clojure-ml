@@ -270,17 +270,17 @@ We will define multimethods for all of these operations. These multimethods will
   for the given labels using the model."
   [model algorithm selected-features validation-set predictor-type hyperparameters
    scaling-factors label-scaling-fns]
-  (reduce (fn [agg [abs-error square-error n predictions]]
-            (-> agg (update :abs-error #(+ % abs-error))
-                (update :square-error #(+ % square-error))
-                (update :n #(+ % n))
-                (update :predictions #(conj % predictions))))
+  (reduce (fn [agg [abs-error square-error predictions]]
+            (-> agg
+                (update :abs-error + abs-error)
+                (update :square-error + square-error)
+                (update :n inc)
+                (update :predictions conj predictions)))
           {:abs-error 0
            :square-error 0
            :n 0
            :predictions []}
           (for [[label & features] validation-set]
-            (do
               (let [features-map (into {} (map vector selected-features features))
                     predicted-value (infer algorithm predictor-type model selected-features hyperparameters features-map
                                            :scaling-factors scaling-factors
@@ -292,7 +292,7 @@ We will define multimethods for all of these operations. These multimethods will
                     diff (- unscaled-label predicted-value)
                     abs-error (Math/abs diff)
                     square-error (* diff diff)]
-                [abs-error square-error 1 prediction])))))
+                [abs-error square-error prediction]))))
 
 (defn- train-and-evaluate
   [algorithm selected-features hyperparameters label-scaling-fns scaling-factors
@@ -584,16 +584,16 @@ The supported hyperparameter search functions are the following:
         eval (fn [hyperparameters-to-optimize]
                (let [hyperparameters (merge hardcoded-hyperparameters hyperparameters-to-optimize)
                      metrics (evaluate algorithm
-                                                       predictor-type
-                                                       selected-features
-                                                       hyperparameters
-                                                       training-set-path
-                                                       evaluate-options
-                                                       selection-metric
-                                                       :scaling-factors scaling-factors
-                                                       :feature-scaling-fns feature-scaling-fns
-                                                       :label-scaling-fns label-scaling-fns
-                                                       :example-weights-path example-weights-path)]
+                                       predictor-type
+                                       selected-features
+                                       hyperparameters
+                                       training-set-path
+                                       evaluate-options
+                                       selection-metric
+                                       :scaling-factors scaling-factors
+                                       :feature-scaling-fns feature-scaling-fns
+                                       :label-scaling-fns label-scaling-fns
+                                       :example-weights-path example-weights-path)]
                  {:optimal-params hyperparameters
                   :selected-evaluation (get metrics selection-metric)
                   :model-evaluations metrics}))

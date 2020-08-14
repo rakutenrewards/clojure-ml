@@ -70,8 +70,8 @@ The main metrics involved in =regression= tasks are:
 
 #+BEGIN_SRC clojure
 (defn model-metrics
-  "Calculate all the metrics given an ArrayList of predictions. Return a map of
-  the computed metrics."
+  "Calculate all the metrics given a map containing vector of predictions, abs-error
+  and square-error. Return a map of the computed metrics."
   [predictor-type eval-metrics]
   (let [{:keys [predictions abs-error square-error n]} eval-metrics
         predictions (if (every? nil? predictions) (ArrayList. []) (ArrayList. predictions))
