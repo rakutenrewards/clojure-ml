@@ -1,11 +1,6 @@
 SRC_DIR = src
 TEST_SRC_DIR = test
 
-.PHONY: clean
-clean:
-	rm -rf $(SRC_DIR)
-	rm -rf $(TEST_SRC_DIR)
-
 .PHONY: lint
 lint:
 	lein cljfmt

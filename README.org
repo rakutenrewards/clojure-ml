@@ -31,6 +31,5 @@ We use [[lein-release][https://github.com/relaynetwork/lein-release]] to release
 
 1. Export =GITHUB_ACTOR= and =GITHUB_TOKEN=. You can generate a token from your own account settings with the =write:packages= permission.
 2. Make sure you are on the master branch, and that its remote branch is set to the primary source repository (https://github.com/Curbside/curbside-clojure-ml).
-3. Make sure that your code is detangled correctly from org files with =make clean && make tangle=
-4. We use [[semantic versioning][https://semver.org]] to describe releases, so make sure to update the version accordingly in =project.clj=
-5. Release a new version with =lein deploy release=
+3. We use [[semantic versioning][https://semver.org]] to describe releases, so make sure to update the version accordingly in =project.clj=
+4. Release a new version with =lein deploy release=
