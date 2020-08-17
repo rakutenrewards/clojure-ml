@@ -1,27 +1,34 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../src/curbside/ml/models.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
-#+OPTIONS: toc:2
-
-#+TITLE: ML Algorithms Interface
-
-* Table of Contents                                            :toc:noexport:
-- [[#namespace-definition][Namespace definition]]
-- [[#supported-algorithms][Supported algorithms]]
-- [[#multimethods][Multimethods]]
-  - [[#xgboost][XGBoost]]
-  - [[#decision-trees][Decision trees]]
-  - [[#svm][SVM]]
-  - [[#linear-svm][Linear SVM]]
-- [[#inference][Inference]]
-- [[#evaluation][Evaluation]]
-- [[#hyperparameters-optimization][Hyperparameters optimization]]
-- [[#tests][Tests]]
-  - [[#namespace-definition-1][Namespace definition]]
-  - [[#hyperparameter-optimization-tests][Hyperparameter optimization tests]]
-
-* Namespace definition
-
-#+BEGIN_SRC clojure
 (ns curbside.ml.models
+  "All models implement a few common functions:
+
+   1. =save= to persist a trained model to disk.
+   2. =load= to load a trained model from disk.
+   3. =train= to train the model on a given problem.
+   4. =predict= to make a prediction
+   5. =dispose= to free allocated memory, if applicable
+
+   We will define multimethods for all of these operations. These multimethods
+   will switch based on a keyword specifying the algorithm to use. Using a
+   keyword allows us to easily specify the algorithm in the pipeline configs.
+
+   This namespace also includes hyperparameter search functionality.
+   The supported hyperparameter search functions are:
+
+   1. Grid Search: we exhaustively try each and every combination possible from
+      the given search space. Note that for continuous values, it is still
+      required to specify a finite list of values to try.
+   2. Random Search: From the given search space, we randomly pick values, the
+      search space can consist of integers, decimals and strings. The integer
+      and decimal spaces are defined by min (inclusive)
+      and max (exclusive) while the string can take a finite set of values
+      defined in 'values' provided as a list. The total number of combinations
+      tried are defined by 'iteration-count' defined in
+      'hyperparameter-search-fn'. This would allow us to explore values inside
+      the continous search space which need not be explicitly defined the config
+      like a grid search. Also, random search allows us to achieve comparable
+      results to grid search much faster due to lesser number of iterations
+      (depending on the number of combinations tried in grid search and
+      iteration count)."
   (:refer-clojure :exclude [load])
   (:require
    [clojure.data.csv :as csv]
@@ -42,31 +49,11 @@
    (java.io File)
    (java.util ArrayList)
    (weka.classifiers.evaluation NominalPrediction)))
-#+END_SRC
 
-* Supported algorithms
-
-This library currently supports the following algorithms:
-
-#+BEGIN_SRC clojure
 (s/def ::algorithm #{:lsvm :svm :c4.5 :random-forest :m5p :xgboost})
 
 (s/def ::predictor-type #{:regression :classification})
-#+END_SRC
 
-* Multimethods
-
-All models implement a few common functions:
-
-1. =save= to persist a trained model to disk.
-2. =load= to load a trained model from disk.
-3. =train= to train the model on a given problem.
-4. =predict= to make a prediction
-5. =dispose= to free allocated memory, if applicable
-
-We will define multimethods for all of these operations. These multimethods will switch based on a keyword specifying the algorithm to use. Using a keyword allows us to easily specify the algorithm in the pipeline configs.
-
-#+BEGIN_SRC clojure
 (defmulti save
   (fn [algorithm model filepath]
     algorithm))
@@ -91,11 +78,7 @@ We will define multimethods for all of these operations. These multimethods will
 (defmethod dispose :default
   [_ _]
   nil)
-#+END_SRC
 
-** XGBoost
-
-#+BEGIN_SRC clojure
 (defmethod save :xgboost
   [_ model filepath]
   (xgboost/save model filepath))
@@ -117,11 +100,7 @@ We will define multimethods for all of these operations. These multimethods will
 (defmethod dispose :xgboost
   [_ model]
   (xgboost/dispose model))
-#+END_SRC
 
-** Decision trees
-
-#+BEGIN_SRC clojure
 (defmethod save :c4.5
   [_algorithm model filepath]
   (decision-trees/save model filepath))
@@ -169,11 +148,7 @@ We will define multimethods for all of these operations. These multimethods will
 (defmethod predict :random-forest
   [_ predictor-type model selected-features _hyperparameters feature-vector]
   (decision-trees/predict predictor-type model selected-features feature-vector))
-#+END_SRC
 
-** SVM
-
-#+BEGIN_SRC clojure
 (defmethod save :svm
   [_ model filepath]
   (svm/save model filepath))
@@ -189,11 +164,7 @@ We will define multimethods for all of these operations. These multimethods will
 (defmethod predict :svm
   [_ _predictor-type model seleted-features hyperparameters feature-vector]
   (svm/predict model seleted-features hyperparameters feature-vector))
-#+END_SRC
 
-** Linear SVM
-
-#+BEGIN_SRC clojure
 (defmethod save :lsvm
   [_ model filepath]
   (linear-svm/save model filepath))
@@ -209,11 +180,7 @@ We will define multimethods for all of these operations. These multimethods will
 (defmethod predict :lsvm
   [_ _predictor-type model _selected-features _hyperparameters feature-vector]
   (linear-svm/predict model feature-vector))
-#+END_SRC
 
-* Inference
-
-#+BEGIN_SRC clojure
 (defn- parse-feature-map
   [selected-features feature-map]
   (reduce-kv #(assoc % %2 (parsing/parse-double %3))
@@ -248,11 +215,7 @@ We will define multimethods for all of these operations. These multimethods will
        (conversion/feature-map-to-vector selected-features)
        (predict algorithm predictor-type model selected-features hyperparameters)
        (unscale-label label-scaling-fns scaling-factors)))
-#+END_SRC
 
-* Evaluation
-
-#+BEGIN_SRC clojure
 (defn- to-temp-csv-path
   [header rows]
   (let [file (doto (File/createTempFile "data_" ".csv")
@@ -395,20 +358,6 @@ We will define multimethods for all of these operations. These multimethods will
                                    (update :n #(+ % n))
                                    (update :predictions concat predictions)))))]
     (metrics/model-metrics predictor-type metrics)))
-#+END_SRC
-
-* Hyperparameters optimization
-
-We generate the various combinations of the hyperparameters to be tried in order to get the best hyperparameters. Each combination is used to train a model with the sampled data and then the best parameters are selected.
-
-The supported hyperparameter search functions are the following:
-1. Grid Search: we exhaustively try each and every combination possible from the given search space. Note that for continuous values, it is still required to specify a finite list of values to try.
-2. Random Search: From the given search space, we randomly pick values, the search space can consist of integers, decimals and strings. The integer and decimal spaces are defined by min (inclusive)
-   and max (exclusive) while the string can take a finite set of values defined in "values" provided as a list. The total number of combinations tried are defined by "iteration-count" defined in
-   "hyperparameter-search-fn". This would allow us to explore values inside the continous search space which need not be explicitly defined the config like a grid search. Also, random search would
-   allow us to achieve comparable results to grid search much faster due to lesser number of iterations (depending on the number of combinations tried in grid search and iteration count).
-
-#+BEGIN_SRC clojure
 
 (def supported-evaluate-types #{:train-test-split :k-fold})
 
@@ -586,141 +535,3 @@ The supported hyperparameter search functions are the following:
                                 (doall)))
         best-evaluation (apply find-best :selected-evaluation evaluated-combos)]
     best-evaluation))
-#+END_SRC
-
-* Tests
-
-** Namespace definition
-
-#+NAME: test-namespace
-#+BEGIN_SRC clojure :tangle ../../../../test/curbside/ml/models_test.clj
-(ns curbside.ml.models-test
-  (:require
-   [clojure.test :refer [deftest is testing]]
-   [curbside.ml.models :as models]
-   [conjure.core :refer [stubbing verify-call-times-for verify-first-call-args-for]]
-   [curbside.ml.utils.tests :as tutils]
-   [curbside.ml.training-sets.conversion :as conversion]))
-#+END_SRC
-
-** Hyperparameter optimization tests
-
-Here, the goal is simply test if we can get models with optimal parameters
-First, we setup some values that will be used in the tests
-
-#+BEGIN_SRC clojure :tangle ../../../../test/curbside/ml/models_test.clj
-(def grid-search-combos-stub-value [{:subsample 0.5, :max_depth 5}
-                                    {:subsample 0.5, :max_depth 6}
-                                    {:subsample 0.5, :max_depth 7}
-                                    {:subsample 0.6, :max_depth 5}
-                                    {:subsample 0.6, :max_depth 6}
-                                    {:subsample 0.6, :max_depth 7}])
-
-(def random-search-combos-stub-value [{:subsample 0.5643362797872074, :max_depth 6, :booster "dart"}
-                                      {:subsample 0.5307578644935428, :max_depth 6, :booster "dart"}
-                                      {:subsample 0.9486528438903652, :max_depth 6, :booster "dart"}
-                                      {:subsample 0.7317135931408416, :max_depth 8, :booster "dart"}
-                                      {:subsample 0.8114551550463982, :max_depth 5, :booster "dart"}
-                                      {:subsample 0.5224498589316126, :max_depth 8, :booster "dart"}
-                                      {:subsample 0.9091339560549907, :max_depth 5, :booster "dart"}
-                                      {:subsample 0.6190130901825939, :max_depth 8, :booster "dart"}
-                                      {:subsample 0.8268034625457685, :max_depth 7, :booster "dart"}
-                                      {:subsample 0.8190881875862341, :max_depth 5, :booster "dart"}])
-
-(def hyperparameter-search-space-random {:subsample {:min  0.5 :max  0.99 :type "decimal"}
-                                         :max_depth {:min  5 :max  9 :type "integer"}
-                                         :booster   {:type   "string" :values ["dart"]}})
-
-(deftest test-optimize-hyperparameters-grid
-  (testing "Check if optimize hyperparameters returns a model with all valid sets of hyperparameters according to given spec or not for grid search"
-    (tutils/stubbing-private [models/grid-search-combos grid-search-combos-stub-value]
-      (let [hyperparameters {:eval_metric "mae" :booster "dart"}
-            hyperparameter-search-space-grid {:subsample [0.5 0.6] :max_depth [5 6 7]}
-            hyperparameter-search-fn {:type :grid}
-            evaluate-options {:type :k-fold :folds 2}
-            {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
-                                                                                        :regression
-                                                                                        ["lat" "lng"]
-                                                                                        hyperparameters
-                                                                                        hyperparameter-search-fn
-                                                                                        hyperparameter-search-space-grid
-                                                                                        tutils/dummy-regression-single-label-training-set-path
-                                                                                        evaluate-options)]
-        (verify-call-times-for models/grid-search-combos 1)
-        (verify-first-call-args-for models/grid-search-combos hyperparameter-search-space-grid)
-        (is (tutils/approx= 0.6 (:subsample optimal-params) 1e-1))
-        (is (= {:subsample 0.6, :max_depth 7 :booster "dart" :eval_metric "mae"} optimal-params))
-        (is (tutils/approx= 0.04606 (:mean-absolute-error model-evaluations) 1e-4))
-        (is (tutils/approx= 0.04606 (:root-mean-square-error model-evaluations) 1e-4))))))
-
-(deftest test-optimize-hyperparameters-random
-  (testing "Check if optimize hyperparameters returns a model with all valid sets of hyperparameters according to given spec or not"
-    (tutils/stubbing-private [models/random-search-combos random-search-combos-stub-value]
-      (let [hyperparameters {:eval_metric "mae" :booster "dart"}
-            hyperparameter-search-fn {:type :random :iteration-count 10}
-            evaluate-options {:type :k-fold :folds 2}
-            {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
-                                                                                        :regression
-                                                                                        ["lat" "lng"]
-                                                                                        hyperparameters
-                                                                                        hyperparameter-search-fn
-                                                                                        hyperparameter-search-space-random
-                                                                                        tutils/dummy-regression-single-label-training-set-path
-                                                                                        evaluate-options)]
-        (verify-call-times-for models/random-search-combos 1)
-        (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
-        (is (tutils/approx= 0.9486 (:subsample optimal-params) 1e-4))
-        (is (= {:subsample 0.9486528438903652 :max_depth 6 :booster "dart" :eval_metric "mae"} optimal-params))
-        (is (tutils/approx= 0.0277 (:mean-absolute-error model-evaluations) 1e-4))
-        (is (tutils/approx= 0.0277 (:root-mean-square-error model-evaluations) 1e-4))))))
-
-(deftest test-optimize-train-test-validation-split
-  (testing "Check if train-test-split validation works properly, and generates models"
-    (with-redefs [shuffle (fn [x] x)]
-      (tutils/stubbing-private [models/random-search-combos random-search-combos-stub-value]
-        (let [hyperparameters {:eval_metric "mae" :booster "dart"}
-              hyperparameter-search-fn {:type :random :iteration-count 10}
-              evaluate-options {:type :train-test-split :train-split-percentage 80}
-              {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
-                                                                                          :regression
-                                                                                          ["lat" "lng"]
-                                                                                          hyperparameters
-                                                                                          hyperparameter-search-fn
-                                                                                          hyperparameter-search-space-random
-                                                                                          tutils/dummy-regression-single-label-training-set-path
-                                                                                          evaluate-options)]
-          (verify-call-times-for models/random-search-combos 1)
-          (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
-          (is (tutils/approx= 0.9486 (:subsample optimal-params) 1e-4))
-          (is (= {:subsample 0.9486528438903652 :max_depth 6 :booster "dart" :eval_metric "mae"} optimal-params))
-          (is (tutils/approx= 0.01873 (:mean-absolute-error model-evaluations) 1e-4))
-          (is (tutils/approx= 0.01873 (:root-mean-square-error model-evaluations) 1e-4)))))))
-
-(deftest test-train-test-split
-  (testing "given a dataset, check if proper splits are generated using train-test-split")
-  (let [training-set-path tutils/dummy-regression-single-label-training-set-path
-        example-weights tutils/dummy-example-weights-path
-        train-split-percentage 80
-        current-split (first (#'curbside.ml.models/train-test-split training-set-path example-weights train-split-percentage))
-        training-set-length (count (conversion/csv-to-maps (:training-csv-path current-split)))
-        training-weights-length (count (conversion/csv-to-maps (:training-weights-path current-split)))
-        validation-set-length (count (:validation-set current-split))]
-    (is (= training-set-length 9))
-    (is (= training-weights-length 9))
-    (is (= validation-set-length 2))))
-
-(deftest test-k-fold-split
-  (testing "given a dataset, check if proper splits are generated")
-  (let [training-set-path tutils/dummy-regression-single-label-training-set-path
-        example-weights tutils/dummy-example-weights-path
-        folds 5
-        all-splits (#'curbside.ml.models/k-fold-split training-set-path example-weights folds)]
-    (is (= (count all-splits) folds))
-    (doseq [current-split all-splits]
-                 (let [training-set-length (count (conversion/csv-to-maps (:training-csv-path current-split)))
-                       training-weights-length (count (conversion/csv-to-maps (:training-weights-path current-split)))
-                       validation-set-length (count (:validation-set current-split))]
-                   (is (= training-set-length 8))
-                   (is (= training-weights-length 8))
-                   (is (= validation-set-length 3))))))
-#+END_SRC

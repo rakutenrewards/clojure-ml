@@ -1,35 +1,10 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/utils/weka.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
-#+OPTIONS: toc:2
-
-#+TITLE: Weka Utilities
-
-* Table of Contents                                             :toc:noexport:
-- [[#introduction][Introduction]]
-  - [[#namespace-definition][Namespace definition]]
-- [[#defining-problems][Defining Problems]]
-
-* Introduction
-
-This namespace contains utilities used in pair with Weka.
-
-** Namespace definition
-
-#+BEGIN_SRC clojure
 (ns curbside.ml.utils.weka
   (:require
    [clojure.java.io :as io])
   (:import
    (java.util ArrayList)
    (weka.core Attribute DenseInstance Instances)))
-#+END_SRC
 
-* Defining Problems
-
-The core model used to define a =problem= in =curbside-clojure-ml= is the =ARFF= model problem that comes from the =Weka= library. At different points in the execution of a training pipeline we may convert a =CVS= training set into =ARFF= to leverage the =Weka= library to compute some statistics about it. Some of other learning algorithms that have been implemented in =curbside-clojure-ml= such as =linear SVM=, =SVM= and =neural networks= use their own problem model. However, at some point in time they may be converted into a =ARFF= model to compute specific statistics or to evaluate some of its component.
-
-This is because of this ubiquity that we define the =problem= function that deals with defining a problem in ARFF. Then we may have other =problem= functions in other namespaces that are specific to those other algorithm implementations.
-
-#+BEGIN_SRC clojure
 (defn problem
   "Define a problem space by reading an ARFF training set. If training is an ARFF
   file then the problem will be read from that file. If training is a set of Instances
@@ -42,9 +17,7 @@ This is because of this ubiquity that we define the =problem= function that deal
                     training-set)]
     (.setClassIndex instances (or class-col-index 0))
     instances))
-#+END_SRC
 
-#+BEGIN_SRC clojure
 (defn- attribute-list
   [predictor-type selected-features]
   (->> selected-features
@@ -66,4 +39,3 @@ This is because of this ubiquity that we define the =problem= function that deal
         (.setValue instance attribute (double val))))
     (.setDataset instance dataset)
     instance))
-#+END_SRC

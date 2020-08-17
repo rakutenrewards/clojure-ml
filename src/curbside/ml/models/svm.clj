@@ -1,24 +1,7 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../../src/curbside/ml/models/svm.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
-#+OPTIONS: toc:2
-
-#+TITLE: SVM
-
-* Table of Contents                                             :toc:noexport:
-- [[#introduction][Introduction]]
-  - [[#namespace-definition][Namespace Definition]]
-- [[#train][Train]]
-- [[#save][Save]]
-- [[#load][Load]]
-- [[#predict][Predict]]
-
-* Introduction
-
-The SVM supports logistic regression and linear support vector machines. The linear SVM classifier uses the [[https://www.csie.ntu.edu.tw/~cjlin/libsvm/][LIBSVM]] library.
-
-** Namespace Definition
-
-#+BEGIN_SRC clojure
 (ns curbside.ml.models.svm
+  "The SVM supports logistic regression and linear support vector machines. The
+   linear SVM classifier uses the
+   [LIBSVM](https://www.csie.ntu.edu.tw/~cjlin/libsvm/) library."
   (:refer-clojure :exclude [load])
   (:require
    [clojure.data.csv :as csv]
@@ -29,18 +12,7 @@ The SVM supports logistic regression and linear support vector machines. The lin
   (:import
    (clojure.lang Reflector)
    (libsvm svm_problem svm_node svm_parameter svm)))
-#+END_SRC
 
-* Train
-
-Once the model is scaled we can train a model that will be used to make predictions. The main concepts related to train a model are:
-
-  1. =problem=: is the labeled data used by the system to train a model given an learning algorithm. This is the input training set.
-  2. =parameters=: are the hyper-parameters of a learning algorithm
-  3. =train=: is the name of the function that get a =problem= and a set of =parameters= as input to output a trained =model=.
-
-#+NAME: svm training
-#+BEGIN_SRC clojure :results silent
 (s/def ::kernel-type #{:linear
                        :poly
                        :pre-computed
@@ -156,36 +128,19 @@ Once the model is scaled we can train a model that will be used to make predicti
     (when-let [error (svm/svm_check_parameter problem-obj params-obj)]
       (throw (Exception. error)))
     (svm/svm_train problem-obj params-obj)))
-#+END_SRC
 
-* Save
-
-Once the model is created and in-memory, we have to be able to save it on the file system and reload it in memory as required.
-
-#+NAME: save model
-#+BEGIN_SRC clojure :results silent
 (defn save
   "Save a SVM model on the file system. Return the list of files that got saved
   on the file system."
   [model filepath]
   (svm/svm_save_model filepath model)
   [filepath])
-#+END_SRC
 
-* Load
-
-#+NAME: load model
-#+BEGIN_SRC clojure :results silent
 (defn load
   "Load a SVM model from the file system into memory"
   [filepath]
   (svm/svm_load_model ^String filepath))
-#+END_SRC
 
-* Predict
-
-#+NAME: predict
-#+BEGIN_SRC clojure
 (defn- create-svm-node
   "Create a `svm_node` at `index` with `value`. If `value` is empty then it
   returns nil otherwise it returns the `svm_node`"
@@ -205,4 +160,3 @@ Once the model is created and in-memory, we have to be able to save it on the fi
   (svm/svm_predict model (->> feature-vector
                               (keep-indexed create-svm-node)
                               into-array)))
-#+END_SRC

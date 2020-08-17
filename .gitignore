@@ -17,7 +17,3 @@ curbside-clojure-ml-*.tgz
 
 # macOS
 .DS_Store
-
-# tangled files
-/src
-/test

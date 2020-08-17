@@ -1,47 +1,3 @@
-#+PROPERTY: header-args:clojure :tangle ../../../../src/curbside/ml/metrics.clj :mkdirp yes :noweb yes :padline yes :results silent :comments link
-#+OPTIONS: toc:2
-
-#+TITLE: Metrics
-
-* Table of Contents                                            :toc:noexport:
-- [[#introduction][Introduction]]
-- [[#namespace-definition][Namespace definition]]
-- [[#model-metrics][Model metrics]]
-- [[#metrics-optimization][Metrics Optimization]]
-- [[#feature-metrics][Feature metrics]]
-  - [[#specification][Specification]]
-  - [[#compute-metrics][Compute metrics]]
-
-* Introduction
-
-The main metrics involved in =classification= tasks are:
-
-  1. =True Positives=
-  2. =False Positives=
-  3. =True Negatives=
-  4. =False Negatives=
-  5. =Precision=
-  6. =Accuracy=
-  7. =Recall=
-  8. =False Positive Rate=
-  9. =True Positive Rate=
-  10. =Area Under The Curve=
-  11. =Area Under PRC=
-  12. =F-Measures=
-      1. =F1=
-
-The main metrics involved in =regression= tasks are:
-
-  1. =Correlation Coefficient=
-  2. =Error Rate=
-  3. =Root Relative Square Error=
-  4. =Root Mean Square Error=
-  5. =Root Mean Prior Squared Error=
-  6. =Relative Absolute Error=
-
-* Namespace definition
-
-#+BEGIN_SRC clojure
 (ns curbside.ml.metrics
   (:refer-clojure :exclude [comparator])
   (:require
@@ -64,11 +20,7 @@ The main metrics involved in =regression= tasks are:
                              GreedyStepwise
                              Ranker)
     (java.util ArrayList)))
-#+END_SRC
 
-* Model metrics
-
-#+BEGIN_SRC clojure
 (defn model-metrics
   "Calculate all the metrics given a map containing vector of predictions, abs-error
   and square-error. Return a map of the computed metrics."
@@ -104,18 +56,7 @@ The main metrics involved in =regression= tasks are:
 
               :correctly-classified-instances (parsing/nan->nil (stats/correctly-classified confusion-matrix))
               :correctly-classified-instances-percent (parsing/nan->nil (stats/correctly-classified-percent confusion-matrix))}))))
-#+END_SRC
 
-* Metrics Optimization
-
-Each of the classification or regression algorithm have different metrics that helps us to determine if a model if better than another a given prediction problem.
-
-When come the time to optimize a model, we have to optimize it according to the result of one of those metrics. Some of the metrics are better when they are higher, others are better when they are lower.
-
-What we do here is to define each of those classification and regression metrics and specify how they should be optimized: by keeping the lower and higher results.
-
-#+NAME: metrics optimize max
-#+BEGIN_SRC clojure
 (defn comparator
   "Returns the comparator to use to compare a metrics' results to optimize its
   value. Returns `nil` if the metric is unknown."
@@ -140,27 +81,7 @@ What we do here is to define each of those classification and regression metrics
         :relative-absolute-error <
         :mean-absolute-error <}
        metric))
-#+END_SRC
-* Feature metrics
-** Specification
 
-| key              | type                  | description                                                                                                                                                                                                   |
-|------------------+-----------------------+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| =:evaluators= | =vector of evaluator= | vector of evaluators that we want to use to evaluate the features. Available evaluators are: =:cfs-subset=, =:correlation=, =:gain-ratio=, =:info-gain=, =:one-r=, =:symmetrical-uncertainty= and =:relief-f= |
-
-Each of the evaluator are different method to evaluate features within a model. Here is a description of each of those methods:
-
-| evaluator                  | description                                                                                                                                                                                                                                                                                     |
-|----------------------------+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| =:cfs-subset=              | Evaluates the worth of a subset of attributes by considering the individual predictive ability of each feature along with the degree of redundancy between them. Subsets of features that are highly correlated with the class while having low intercorrelation are preferred.                 |
-| =:correlation=             | Evaluates the worth of an attribute by measuring the correlation (Pearson's) between it and the class. Nominal attributes are considered on a value by value basis by treating each value as an indicator. An overall correlation for a nominal attribute is arrived at via a weighted average. |
-| =:gain-ratio=              | Evaluates the worth of an attribute by measuring the gain ratio with respect to the class.                                                                                                                                                                                                      |
-| =:info-gain=               | Evaluates the worth of an attribute by measuring the information gain with respect to the class.                                                                                                                                                                                                |
-| =:relief-f=                | Evaluates the worth of an attribute by repeatedly sampling an instance and considering the value of the given attribute for the nearest instance of the same and different class. Can operate on both discrete and continuous class data.                                                       |
-| =:one-r=                   | Evaluates the worth of an attribute by using the OneR classifier.                                                                                                                                                                                                                               |
-| =:symmetrical-uncertainty= | Evaluates the worth of an attribute by measuring the symmetrical uncertainty with respect to the class.                                                                                                                                                                                         |
-
-#+BEGIN_SRC clojure
 (s/def ::evaluator #{:cfs-subset
                      :correlation
                      :gain-ratio
@@ -169,11 +90,7 @@ Each of the evaluator are different method to evaluate features within a model. 
                      :one-r
                      :symmetrical-uncertainty})
 (s/def ::evaluators (s/coll-of ::evaluator :distinct true))
-#+END_SRC
 
-** Compute metrics
-
-#+BEGIN_SRC clojure
 (defn- get-attribute-key
   [id instances]
   (keyword
@@ -225,4 +142,3 @@ Each of the evaluator are different method to evaluate features within a model. 
               (assoc metrics evaluator (evaluate-feature evaluator instances)))
             {}
             evaluators)))
-#+END_SRC
