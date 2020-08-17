@@ -1,6 +1,3 @@
-SRC_DIR = src
-TEST_SRC_DIR = test
-
 .PHONY: lint
 lint:
 	lein cljfmt
