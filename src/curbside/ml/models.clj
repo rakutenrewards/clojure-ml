@@ -336,7 +336,7 @@
 
 (defn evaluate
   "Either cross validation or validation using a held out test set"
-  [algorithm predictor-type selected-features hyperparameters training-set-path evaluate-options selection-metric
+  [algorithm predictor-type selected-features hyperparameters training-set-path evaluate-options
    & {:keys [scaling-factors label-scaling-fns example-weights-path]}]
   (let [splits-to-evaluate (create-train-validate-splits evaluate-options training-set-path example-weights-path)
         metrics (->> splits-to-evaluate
@@ -518,7 +518,6 @@
                                        hyperparameters
                                        training-set-path
                                        evaluate-options
-                                       selection-metric
                                        :scaling-factors scaling-factors
                                        :feature-scaling-fns feature-scaling-fns
                                        :label-scaling-fns label-scaling-fns
