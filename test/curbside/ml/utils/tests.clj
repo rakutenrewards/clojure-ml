@@ -33,6 +33,9 @@
 (def dummy-regression-single-label-training-set-path
   (io/resource "training-sets/dummy-regression-single-label.csv"))
 
+(def dummy-ranking-training-set-path
+  (io/resource "training-sets/dummy-ranking.csv"))
+
 (def dummy-example-weights-path (io/resource "training-sets/dummy-weights.csv"))
 
 (defn approx=

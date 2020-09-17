@@ -52,7 +52,7 @@
 
 (s/def ::algorithm #{:lsvm :svm :c4.5 :random-forest :m5p :xgboost})
 
-(s/def ::predictor-type #{:regression :classification})
+(s/def ::predictor-type #{:classification :ranking :regression})
 
 (defmulti save
   (fn [algorithm model filepath]
@@ -88,10 +88,10 @@
   (xgboost/load filepath))
 
 (defmethod train :xgboost
-  [_ _predictor-type training-set-path params & [weights-path]]
+  [_ predictor-type training-set-path params & [weights-path]]
   (if weights-path
-    (xgboost/train training-set-path params weights-path)
-    (xgboost/train training-set-path params)))
+    (xgboost/train predictor-type training-set-path params weights-path)
+    (xgboost/train predictor-type training-set-path params)))
 
 (defmethod predict :xgboost
   [_ _predictor-type model _seleted-features hyperparameters feature-vector]
