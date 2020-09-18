@@ -12,8 +12,10 @@
    [clojure.string :as string]
    [clojure.walk :as walk]
    [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.training-sets.encoding :as encoding]
    [curbside.ml.training-sets.sampling :as sampling]
-   [curbside.ml.utils.parsing :as parsing])
+   [curbside.ml.utils.parsing :as parsing]
+   [clojure.data.csv :as csv])
   (:import
    (ml.dmlc.xgboost4j LabeledPoint)
    (ml.dmlc.xgboost4j.java Booster DMatrix DMatrix$SparseType XGBoost XGBoostError)))
@@ -35,79 +37,22 @@
   ([[label & features]]
    (->LabeledPoint label features)))
 
-(defn- filepath->regression-DMatrix
-  [filepath]
-  (let [columns-keys (conversion/csv-column-keys filepath)
-        vectors (->> filepath
-                     (conversion/csv-to-maps)
-                     (map #(->LabeledPoint ((apply juxt columns-keys) %))))]
-    (DMatrix. (.iterator vectors) nil)))
-
-(defn- ranking-label-keys
-  "Given the `column-keys` present in a csv dataset, returns which ones represent
-  a label. For ranking tasks, there are multiple labels per example. Each label
-  represents the score of a specific document."
-  [column-keys]
-  (filter (fn [k]
-            (string/starts-with? (name k) "label-"))
-          column-keys))
-
-(defn- one-hot-vectors
-  "Returns a sequence of `n` one-vectors
-
-  [1, 0, 0, ...], [0, 1, 0, ...], [0, 0 , 1, ...]
-
-  of size `n`."
-  [n]
-  (for [i (range n)]
-    (vec (concat (repeat i 0)
-                 [1]
-                 (repeat (- n i 1) 0)))))
-
-(defn- ranking-example-tuples
-  "Given an example map, returns a sequence of tuples [label features]. A tuple is
-  generated for each `label-keys`. `features` consists of the concatenation of
-  the values of `features-keys` and a one-hot vector."
-  [label-keys feature-keys example]
-  (let [labels (map #(% example) label-keys)
-        features (map #(% example) feature-keys)]
-    (map (fn [label one-hot-vector]
-           [label (vec (concat features one-hot-vector))])
-         labels
-         (one-hot-vectors (count labels)))))
-
-(defn- ranking-DMatrix-rows
-  [label-keys feature-keys example-maps]
-  (mapcat (partial ranking-example-tuples label-keys feature-keys)
-          example-maps))
-
-(defn- filepath->ranking-DMatrix
-  [filepath]
-  (let [example-maps (conversion/csv-to-maps filepath)
-        ks (keys (first example-maps))
-        label-keys (ranking-label-keys ks)
-        feature-keys (set/difference (set ks) (set label-keys))
-        points (->> example-maps
-                    (ranking-DMatrix-rows label-keys feature-keys)
-                    (map (fn [[label features]]
-                           (->LabeledPoint label features))))
-        groups (repeat (count example-maps) (count label-keys))]
-    (doto (DMatrix. (.iterator points) nil)
-      (.setGroup (int-array groups))
-      (.setWeight (float-array (repeat (count groups) 1.0))))))
-
-(defn- filepath->DMatrix
-  [predictor-type filepath]
-  (if (= predictor-type :ranking)
-    (filepath->ranking-DMatrix filepath)
-    (filepath->regression-DMatrix filepath)))
-
-(defn- set-sample-weights!
-  "Sets the sample weights vector of a DMatrix. Mutates the DMatrix and returns
-   nil."
-  [dmatrix weights]
-  (assert (= (count weights) (.rowNum dmatrix)))
-  (.setWeight dmatrix (float-array weights)))
+(defn- ->DMatrix
+  [example-maps features training-set-encoding groups weights]
+  (let [labels (map :label example-maps)
+        vectors (->> example-maps
+                     (map #(conversion/feature-map-to-vector features training-set-encoding %))
+                     (map #(->LabeledPoint %1 %2) labels))
+        ;; When groups is specified, weights must have the same length as groups.
+        weights (or weights
+                    (when (some? groups)
+                      (repeat (count groups) 1.0)))
+        dm (DMatrix. (.iterator vectors) nil)]
+    (when (some? groups)
+      (.setGroup dm (int-array groups)))
+    (when (some? weights)
+      (.setWeight dm (float-array weights)))
+    dm))
 
 (defn- split-DMatrix
   "Split the end of a DMatrix off into a second DMatrix.
@@ -122,32 +67,39 @@
         last-indices (int-array (range split-count n))]
     [(.slice m first-indices) (.slice m last-indices)]))
 
+(defn- filepath->groups
+  [filepath]
+  (map :group (conversion/csv-to-maps filepath)))
+
 (defn train
-  ([predictor-type training-set-path hyperparams]
-   (train predictor-type training-set-path hyperparams nil))
-  ([predictor-type training-set-path
-    {:keys [early-stopping-rounds num-rounds validation-set-size]
-     :as hyperparameters}
-    example-weights-path]
-   (let [dm (filepath->DMatrix predictor-type training-set-path)
-         weights (when example-weights-path (sampling/filepath->sample-weights example-weights-path))
-         _ (when weights (set-sample-weights! dm weights))
-         [train val] (if (some? validation-set-size)
-                       (split-DMatrix dm validation-set-size)
-                       [dm nil])
-         booster (or (:booster hyperparameters) "gbtree")
-         model (XGBoost/train
-                train
-                (walk/stringify-keys hyperparameters)
-                (int (or num-rounds default-num-rounds))
-                (if validation-set-size {"validation" val} {})
-                nil
-                nil
-                nil
-                (or early-stopping-rounds 0))]
-     (.setAttr model "booster" booster)
-     {:xgboost-model model
-      :booster booster})))
+  [{:keys [training-set-path
+           training-set-encoding
+           example-weights-path
+           example-groups-path]
+    :as _training-set-infos}
+   {:keys [early-stopping-rounds num-rounds validation-set-size]
+    :as hyperparameters}]
+  (let [features (rest (conversion/csv-column-keys training-set-path))
+        examples (conversion/csv-to-maps training-set-path)
+        weights (when example-weights-path (sampling/filepath->sample-weights example-weights-path))
+        groups (when example-groups-path (filepath->groups example-groups-path))
+        dm (->DMatrix examples features training-set-encoding groups weights)
+        [train val] (if (some? validation-set-size)
+                      (split-DMatrix dm validation-set-size)
+                      [dm nil])
+        booster (or (:booster hyperparameters) "gbtree")
+        model (XGBoost/train
+               train
+               (walk/stringify-keys hyperparameters)
+               (int (or num-rounds default-num-rounds))
+               (if validation-set-size {"validation" val} {})
+               nil
+               nil
+               nil
+               (or early-stopping-rounds 0))]
+    (.setAttr model "booster" booster)
+    {:xgboost-model model
+     :booster booster}))
 
 (defn dispose
   "Frees the memory allocated to given model."

@@ -2,6 +2,7 @@
   (:require [clojure.java.io :as io]
             [clojure.data.csv :as csv]
             [clojure.string :as string]
+            [curbside.ml.training-sets.encoding :as encoding]
             [curbside.ml.utils.parsing :as parsing])
   (:import (weka.core.converters CSVSaver)
            (weka.filters Filter)
@@ -137,5 +138,14 @@
 
 (defn feature-map-to-vector
   "Converts a map of features to a vector using a vector of feature-names."
-  [feature-names feature-map]
-  (mapv (fn [n] (get feature-map n)) feature-names))
+  ([feature-names feature-map]
+   (->> feature-names
+        (map (fn [n] (get feature-map n)))
+        (flatten)
+        (into [])))
+  ([feature-names training-set-encoding feature-map]
+   (if (some? training-set-encoding)
+     (->> feature-map
+        (encoding/encode-feature-map training-set-encoding)
+        (feature-map-to-vector feature-names))
+     (feature-map-to-vector feature-names feature-map))))

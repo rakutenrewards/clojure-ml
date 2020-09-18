@@ -89,9 +89,11 @@
 
 (defmethod train :xgboost
   [_ predictor-type training-set-path params & [weights-path]]
-  (if weights-path
-    (xgboost/train predictor-type training-set-path params weights-path)
-    (xgboost/train predictor-type training-set-path params)))
+  (xgboost/train {:training-set-path training-set-path
+                  :training-set-encoding nil
+                  :example-weights-path weights-path
+                  :example-groups-path nil} ;; TODO support passing a group path and encoding-fns. This may result in breaking changes in the API
+                 params))
 
 (defmethod predict :xgboost
   [_ _predictor-type model _seleted-features hyperparameters feature-vector]
