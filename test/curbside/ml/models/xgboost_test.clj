@@ -11,17 +11,29 @@
    [ml.dmlc.xgboost4j.java Booster]))
 
 (deftest test-split-dmatrix
-  (let [dm (#'xgboost/filepath->DMatrix tutils/dummy-regression-single-label-training-set-path)
+  (let [examples (conversion/csv-to-maps tutils/dummy-regression-single-label-training-set-path)
+        dm (#'xgboost/->DMatrix examples [:a :b] nil nil nil)
         [dm1 dm2] (#'xgboost/split-DMatrix dm 0.2)]
     (is (= 9 (.rowNum dm1)))
     (is (= 2 (.rowNum dm2)))))
 
-(deftest test-train-and-predict
+(deftest test-train-and-predict-regression
   (testing "given a dataset with a single label, when training, then the model always return a prediction close to this label."
     (let [hyperparameters {:verbosity 3 :num-rounds 5 :booster "dart" :learning_rate 0.9 :objective "reg:squarederror"}
-          model (xgboost/train tutils/dummy-regression-single-label-training-set-path hyperparameters)
+          model (xgboost/train {:training-set-path tutils/dummy-regression-single-label-training-set-path} hyperparameters)
           prediction (xgboost/predict model hyperparameters [0 0])]
       (is (tutils/approx= 0.0 prediction 1e-1)))))
+
+(deftest test-train-and-predict-ranking ;; TODO move this test to the test_models.clj file once ranking is supported in the high-level api.
+  (testing "given a dummy ranking dataset, when training, then the model can be used to predict"
+    (let [hyperparameters {:num-rounds 5 :max_depth 5 :learning_rate 0.99 :objective "rank:ndcg"}
+          model (xgboost/train
+                 {:training-set-path tutils/dummy-ranking-training-set-path
+                  :example-groups-path tutils/dummy-ranking-training-set-groups-path
+                  :training-set-encoding tutils/dummy-ranking-training-set-encoding}
+                 hyperparameters)
+          prediction (xgboost/predict model hyperparameters [0 1 2 3 4 5])]
+      (is (tutils/approx= prediction 0.5 1e-1))))) ;; Regression test
 
 (deftest test-sample-weighting
   (testing "given a dataset with a single label, when training with sample weighting, then the model always return a prediction close to this label."
@@ -30,9 +42,9 @@
                            :weight-mean 0.5 :weight-label-name "label"
                            :weight-stddev 1.0}
           model (xgboost/train
-                 tutils/dummy-regression-single-label-training-set-path
-                 hyperparameters
-                 tutils/dummy-example-weights-path)
+                 {:training-set-path tutils/dummy-regression-single-label-training-set-path
+                  :example-weights-path tutils/dummy-example-weights-path}
+                 hyperparameters)
           prediction (xgboost/predict model hyperparameters [0 0])]
       (is (tutils/approx= 0.0 prediction 1e-1)))))
 
@@ -45,7 +57,7 @@
           timeout-ch (timeout 2000)
           model-ch (thread-call
                     #(xgboost/train
-                      tutils/dummy-regression-single-label-training-set-path
+                      {:training-set-path tutils/dummy-regression-single-label-training-set-path}
                       hyperparameters))
           [v c] (alts!! [timeout-ch model-ch])]
       (is (= c model-ch))
@@ -54,7 +66,9 @@
 (deftest test-save-and-load-model
   (testing "given a trained model, when saving and loading, then the loaded model is the model that was saved."
     (let [hyperparameters {:booster "gbtree"}
-          model (xgboost/train tutils/dummy-regression-single-label-training-set-path hyperparameters)
+          model (xgboost/train
+                 {:training-set-path tutils/dummy-regression-single-label-training-set-path}
+                 hyperparameters)
           model-path (tutils/create-temp-path ".xgb")]
       (xgboost/save model model-path)
       (let [loaded-model (xgboost/load model-path)]

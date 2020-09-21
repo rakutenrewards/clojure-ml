@@ -52,7 +52,7 @@
 
 (s/def ::algorithm #{:lsvm :svm :c4.5 :random-forest :m5p :xgboost})
 
-(s/def ::predictor-type #{:regression :classification})
+(s/def ::predictor-type #{:classification :ranking :regression})
 
 (defmulti save
   (fn [algorithm model filepath]
@@ -88,10 +88,12 @@
   (xgboost/load filepath))
 
 (defmethod train :xgboost
-  [_ _predictor-type training-set-path params & [weights-path]]
-  (if weights-path
-    (xgboost/train training-set-path params weights-path)
-    (xgboost/train training-set-path params)))
+  [_ predictor-type training-set-path params & [weights-path]]
+  (xgboost/train {:training-set-path training-set-path
+                  :training-set-encoding nil
+                  :example-weights-path weights-path
+                  :example-groups-path nil} ;; TODO support passing a group path and encoding-fns. This may result in breaking changes in the API
+                 params))
 
 (defmethod predict :xgboost
   [_ _predictor-type model _seleted-features hyperparameters feature-vector]

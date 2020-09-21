@@ -107,4 +107,18 @@
     (is (= [1 2 3] (conversion/feature-map-to-vector [:a :b :c] {:a 1 :b 2 :c 3 :d "danger"}))))
   (testing "given a feature map, when converting to vector, features are put in the order of the inputed selected features"
     (is (= [1 2 3 4] (conversion/feature-map-to-vector [:b-2 :c :b-1 :a]
-                                                       {:c 2 :b-2 1 :a 4 :b-1 3})))))
+                                                       {:c 2 :b-2 1 :a 4 :b-1 3}))))
+  (testing "given a feature map and a one-hot encoding, when converting to vector, features are properly encoded"
+    (is (= [1 0 1 0 3]
+           (conversion/feature-map-to-vector [:a :b :c]
+                                             {:features
+                                              {:b {:type :one-hot
+                                                   :one-hot-vectors {"foo" [1 0 0]
+                                                                     "bar" [0 1 0]
+                                                                     "spam" [0 1 0]}}}}
+                                             {:a 1 :b "bar" :c 3}))))
+  (testing "given a feature map a no encoding, when converting to vector, no encoding is performed"
+    (is (= [1 2 3]
+           (conversion/feature-map-to-vector [:a :b :c]
+                                             nil
+                                             {:a 1 :b 2 :c 3})))))

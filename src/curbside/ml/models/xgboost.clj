@@ -7,57 +7,52 @@
   (:require
    [clojure.java.io :as io]
    [clojure.tools.logging :as log]
+   [clojure.set :as set]
    [clojure.spec.alpha :as s]
    [clojure.string :as string]
    [clojure.walk :as walk]
    [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.training-sets.encoding :as encoding]
    [curbside.ml.training-sets.sampling :as sampling]
-   [curbside.ml.utils.parsing :as parsing])
+   [curbside.ml.utils.parsing :as parsing]
+   [clojure.data.csv :as csv])
   (:import
    (ml.dmlc.xgboost4j LabeledPoint)
-   (ml.dmlc.xgboost4j.java Booster DMatrix XGBoost XGBoostError)))
+   (ml.dmlc.xgboost4j.java Booster DMatrix DMatrix$SparseType XGBoost XGBoostError)))
 
 (def default-num-rounds 10)
 
-(defn- get-non-nil-values-indices
-  "Get a vector of non-nil indices from a vector `v`"
-  [vec]
-  (->> vec
-       (keep-indexed (fn [i v]
-                       (when v
-                         i)))
-       int-array))
-
 (defn- ->LabeledPoint
-  "Create a labeled point from a vector. The vector can be dense or sparse."
-  [v]
-  (LabeledPoint.
-   (->> v
-        first
-        parsing/parse-float)
-   (->> v
-        rest
-        (map parsing/parse-float)
-        get-non-nil-values-indices)
-   (->> v
-        rest
-        (keep parsing/parse-float)
-        float-array)))
+  "Create a labeled point from a vector."
+  ([label features]
+   (let [non-zeros-indexed (keep-indexed
+                            (fn [i v]
+                              (when-not (or (nil? v) (zero? v))
+                                [i v]))
+                            features)]
+     (LabeledPoint.
+      (float label)
+      (int-array (map first non-zeros-indexed))
+      (float-array (map second non-zeros-indexed)))))
+  ([[label & features]]
+   (->LabeledPoint label features)))
 
-(defn- filepath->DMatrix
-  [filepath]
-  (let [columns-keys (conversion/csv-column-keys filepath)
-        vectors (->> filepath
-                     (conversion/csv-to-maps)
-                     (map #(->LabeledPoint ((apply juxt columns-keys) %))))]
-    (DMatrix. (.iterator vectors) nil)))
-
-(defn- set-sample-weights!
-  "Sets the sample weights vector of a DMatrix. Mutates the DMatrix and returns
-   nil."
-  [dmatrix weights]
-  (assert (= (count weights) (.rowNum dmatrix)))
-  (.setWeight dmatrix (float-array weights)))
+(defn- ->DMatrix
+  [example-maps features training-set-encoding groups weights]
+  (let [labels (map :label example-maps)
+        vectors (->> example-maps
+                     (map #(conversion/feature-map-to-vector features training-set-encoding %))
+                     (map #(->LabeledPoint %1 %2) labels))
+        ;; When groups is specified, weights must have the same length as groups.
+        weights (or weights
+                    (when (some? groups)
+                      (repeat (count groups) 1.0)))
+        dm (DMatrix. (.iterator vectors) nil)]
+    (when (some? groups)
+      (.setGroup dm (int-array groups)))
+    (when (some? weights)
+      (.setWeight dm (float-array weights)))
+    dm))
 
 (defn- split-DMatrix
   "Split the end of a DMatrix off into a second DMatrix.
@@ -72,30 +67,55 @@
         last-indices (int-array (range split-count n))]
     [(.slice m first-indices) (.slice m last-indices)]))
 
+(defn- filepath->groups
+  [filepath]
+  (map :group (conversion/csv-to-maps filepath)))
+
 (defn train
-  ([training-set-path hyperparams]
-   (train training-set-path hyperparams nil))
-  ([training-set-path
-    {:keys [early-stopping-rounds num-rounds validation-set-size]
-     :as hyperparameters}
-    example-weights-path]
-   (let [dm (filepath->DMatrix training-set-path)
-         weights (when example-weights-path (sampling/filepath->sample-weights example-weights-path))
-         _ (when weights (set-sample-weights! dm weights))
-         [train val] (split-DMatrix dm (or validation-set-size 0.0))
-         booster (or (:booster hyperparameters) "gbtree")
-         model (XGBoost/train
-                train
-                (walk/stringify-keys hyperparameters)
-                (int (or num-rounds default-num-rounds))
-                (if validation-set-size {"validation" val} {})
-                nil
-                nil
-                nil
-                (or early-stopping-rounds 0))]
-     (.setAttr model "booster" booster)
-     {:xgboost-model model
-      :booster booster})))
+  "Train an xgboost model on the provided training set. Accepts two maps.
+
+  The first map describes the training set and contains the following keys:
+  - `:training-set-path`: path to a csv training set
+  - `:training-set-encoding` (optional):  encoding configuration of
+     the features (see `curbside.ml.training-sets.encoding`)
+  - `:example-weights-path`: path to a csv list listing the weight of
+    each examples (see `curbside.ml.training-sets.sampling`)
+  - `:example-groups-path`: path to a single column (group) csv file
+    (used for ranking, see xgboost's official documentation).
+
+  Not that for ranking tasks, example weights are per group, meaning that both
+  csv files must have the same number of rows.
+
+  The second argument map is the hyperparameters of the models. See
+  https://xgboost.readthedocs.io/en/latest/parameter.html#"
+  [{:keys [training-set-path
+           training-set-encoding
+           example-weights-path
+           example-groups-path]
+    :as _training-set-infos}
+   {:keys [early-stopping-rounds num-rounds validation-set-size]
+    :as hyperparameters}]
+  (let [features (rest (conversion/csv-column-keys training-set-path))
+        examples (conversion/csv-to-maps training-set-path)
+        weights (when example-weights-path (sampling/filepath->sample-weights example-weights-path))
+        groups (when example-groups-path (filepath->groups example-groups-path))
+        dm (->DMatrix examples features training-set-encoding groups weights)
+        [train val] (if (some? validation-set-size)
+                      (split-DMatrix dm validation-set-size)
+                      [dm nil])
+        booster (or (:booster hyperparameters) "gbtree")
+        model (XGBoost/train
+               train
+               (walk/stringify-keys hyperparameters)
+               (int (or num-rounds default-num-rounds))
+               (if validation-set-size {"validation" val} {})
+               nil
+               nil
+               nil
+               (or early-stopping-rounds 0))]
+    (.setAttr model "booster" booster)
+    {:xgboost-model model
+     :booster booster}))
 
 (defn dispose
   "Frees the memory allocated to given model."
@@ -114,14 +134,13 @@
 (defn- ->predict-DMatrix
   "Convert a 1D vec of floats into an DMatrix meant for use as an input to a
   Booster's .predict() method."
-  [vec]
-  (DMatrix. (.iterator [(->LabeledPoint vec)]) nil))
+  [features]
+  (DMatrix. (.iterator [(->LabeledPoint 1.0 ;; The 1.0 label will be ignored when doing prediction
+                                        features)]) nil))
 
 (defn predict
   [{:keys [xgboost-model booster] :as _model} hyperparameters feature-vector]
-  (let [;; Pad to add a dummy label at the front of the vector.
-        ;; It will be ignored when doing prediction
-        dmatrix (->predict-DMatrix (into [1.0] feature-vector))]
+  (let [dmatrix (->predict-DMatrix feature-vector)]
     (->
      ;; lock for mutual exclusion w.r.t. dispose.
      (locking xgboost-model
@@ -194,6 +213,7 @@
                      "survival:cox"
                      "multi:softmax"
                      "multi:softprob"
+                     "rank:ndcg"
                      "rank:pairwise"
                      "reg:gamma"
                      "reg:tweedie"

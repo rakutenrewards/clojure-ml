@@ -1,6 +1,7 @@
 (ns curbside.ml.utils.tests
   (:require
    [clojure.data.csv :as csv]
+   [clojure.edn :as edn]
    [clojure.walk :as walk]
    [conjure.core :as conjure]
    [clojure.java.io :as io])
@@ -34,6 +35,15 @@
   (io/resource "training-sets/dummy-regression-single-label.csv"))
 
 (def dummy-example-weights-path (io/resource "training-sets/dummy-weights.csv"))
+
+(def dummy-ranking-training-set-path
+  (io/resource "training-sets/dummy-ranking.csv"))
+
+(def dummy-ranking-training-set-groups-path
+  (io/resource "training-sets/dummy-ranking.groups.csv"))
+
+(def dummy-ranking-training-set-encoding
+  (edn/read-string (slurp (io/resource "training-sets/dummy-ranking.encoding.edn"))))
 
 (defn approx=
   [x y tolerance]
