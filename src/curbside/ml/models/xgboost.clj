@@ -72,6 +72,22 @@
   (map :group (conversion/csv-to-maps filepath)))
 
 (defn train
+  "Train an xgboost model on the provided training set. Accepts two maps.
+
+  The first map describes the training set and contains the following keys:
+  - `:training-set-path`: path to a csv training set
+  - `:training-set-encoding` (optional):  encoding configuration of
+     the features (see `curbside.ml.training-sets.encoding`)
+  - `:example-weights-path`: path to a csv list listing the weight of
+    each examples (see `curbside.ml.training-sets.sampling`)
+  - `:example-groups-path`: path to a single column (group) csv file
+    (used for ranking, see xgboost's official documentation).
+
+  Not that for ranking tasks, example weights are per group, meaning that both
+  csv files must have the same number of rows.
+
+  The second argument map is the hyperparameters of the models. See
+  https://xgboost.readthedocs.io/en/latest/parameter.html#"
   [{:keys [training-set-path
            training-set-encoding
            example-weights-path
