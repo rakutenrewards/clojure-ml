@@ -4,23 +4,7 @@
    [clojure.edn :as edn]
    [clojure.walk :as walk]
    [conjure.core :as conjure]
-   [clojure.java.io :as io])
-  (:import
-   [java.io File]))
-
-(defn create-temp-path
-  [extension]
-  (let [file (doto (File/createTempFile "test_" extension)
-               (.deleteOnExit))]
-    (.getPath file)))
-
-(defn create-temp-csv-path
-  ([]
-   (create-temp-path ".csv"))
-  ([content]
-   (let [path (create-temp-csv-path)]
-     (spit path content)
-     path)))
+   [clojure.java.io :as io]))
 
 (defn count-csv-rows
   [path]

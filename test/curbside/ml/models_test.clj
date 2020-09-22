@@ -73,7 +73,7 @@
 
 (deftest test-optimize-train-test-validation-split
   (testing "Check if train-test-split validation works properly, and generates models"
-    (with-redefs [shuffle (fn [x] x)]
+    (with-redefs [shuffle identity]
       (tutils/stubbing-private [models/random-search-combos random-search-combos-stub-value]
         (let [hyperparameters {:eval_metric "mae" :booster "dart"}
               hyperparameter-search-fn {:type :random :iteration-count 10}
@@ -90,33 +90,28 @@
           (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
           (is (tutils/approx= 0.9486 (:subsample optimal-params) 1e-4))
           (is (= {:subsample 0.9486528438903652 :max_depth 6 :booster "dart" :eval_metric "mae"} optimal-params))
-          (is (tutils/approx= 0.01873 (:mean-absolute-error model-evaluations) 1e-4))
-          (is (tutils/approx= 0.01873 (:root-mean-square-error model-evaluations) 1e-4)))))))
+          (is (tutils/approx= 0.0222 (:mean-absolute-error model-evaluations) 1e-4))
+          (is (tutils/approx= 0.0222 (:root-mean-square-error model-evaluations) 1e-4)))))))
 
-(deftest test-train-test-split
-  (testing "given a dataset, check if proper splits are generated using train-test-split")
-  (let [training-set-path tutils/dummy-regression-single-label-training-set-path
-        example-weights tutils/dummy-example-weights-path
-        train-split-percentage 80
-        current-split (first (#'curbside.ml.models/train-test-split training-set-path example-weights train-split-percentage))
-        training-set-length (count (conversion/csv-to-maps (:training-csv-path current-split)))
-        training-weights-length (count (conversion/csv-to-maps (:training-weights-path current-split)))
-        validation-set-length (count (:validation-set current-split))]
-    (is (= training-set-length 9))
-    (is (= training-weights-length 9))
-    (is (= validation-set-length 2))))
 
-(deftest test-k-fold-split
-  (testing "given a dataset, check if proper splits are generated")
-  (let [training-set-path tutils/dummy-regression-single-label-training-set-path
-        example-weights tutils/dummy-example-weights-path
-        folds 5
-        all-splits (#'curbside.ml.models/k-fold-split training-set-path example-weights folds)]
-    (is (= (count all-splits) folds))
-    (doseq [current-split all-splits]
-                 (let [training-set-length (count (conversion/csv-to-maps (:training-csv-path current-split)))
-                       training-weights-length (count (conversion/csv-to-maps (:training-weights-path current-split)))
-                       validation-set-length (count (:validation-set current-split))]
-                   (is (= training-set-length 8))
-                   (is (= training-weights-length 8))
-                   (is (= validation-set-length 3))))))
+(deftest test-optimize-ranking
+  (testing "given a dummy ranking dataset, we can train a ranking model"
+    (with-redefs [shuffle identity]
+      (tutils/stubbing-private [models/random-search-combos random-search-combos-stub-value]
+        (let [hyperparameters {:num-rounds 5 :max_depth 5 :learning_rate 0.99 :objective "rank:ndcg"}
+              hyperparameter-search-fn {:type :random :iteration-count 10}
+              evaluate-options {:type :train-test-split :train-split-percentage 80}
+              {:keys [optimal-params]} (models/optimize-hyperparameters :xgboost
+                                                                        :regression
+                                                                        ["lat" "lng"]
+                                                                        hyperparameters
+                                                                        hyperparameter-search-fn
+                                                                        hyperparameter-search-space-random
+                                                                        tutils/dummy-ranking-training-set-path
+                                                                        evaluate-options
+                                                                        :example-groups-path
+                                                                        tutils/dummy-ranking-training-set-groups-path)]
+          (verify-call-times-for models/random-search-combos 1)
+          (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
+          (is (tutils/approx= 0.9091 (:subsample optimal-params) 1e-4))
+          (is (= {:num-rounds 5 :max_depth 5, :learning_rate 0.99, :objective "rank:ndcg", :subsample 0.9091339560549907, :booster "dart"} optimal-params))))))) ;; TODO add assertion on the ranking metrics evaluated on this model https://github.com/RakutenReady/Team/issues/51929

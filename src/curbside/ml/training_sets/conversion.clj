@@ -136,6 +136,12 @@
     (with-open [writer (io/writer output-path)]
       (csv/write-csv writer (concat [header] rows)))))
 
+(defn vector-to-csv
+  [output-path header v]
+  (with-open [writer (io/writer output-path)]
+    (csv/write-csv writer (concat [[header]]
+                                  (map vector v)))))
+
 (defn feature-map-to-vector
   "Converts a map of features to a vector using a vector of feature-names."
   ([feature-names feature-map]

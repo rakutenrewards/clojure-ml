@@ -1,14 +1,15 @@
 (ns curbside.ml.training-sets.sampling-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.training-sets.sampling :refer [sampling-training-set filepath->sample-weights]]
+   [curbside.ml.training-sets.sampling :refer [sampling-training-set]]
+   [curbside.ml.utils.io :as io-utils]
    [curbside.ml.utils.tests :as tutils]))
 
-(def empty-csv (tutils/create-temp-csv-path "label,a,b,c,d\n"))
+(def empty-csv (io-utils/create-temp-csv-path "label,a,b,c,d\n"))
 
 (defn test-sampling-training-set-sample-size
   [predictor-type input]
-  (let [output (tutils/create-temp-csv-path)]
+  (let [output (io-utils/create-temp-csv-path)]
     (testing "given the default config, when sampling, when it keeps all the data points"
       (sampling-training-set input output {} predictor-type)
       (is (= (tutils/count-csv-rows input)
@@ -33,15 +34,10 @@
 
 (deftest test-sampling-empty-dataset
   (testing "given an empty dataset and a :max-sample-size config, when sampling, an empty dataset is produced"
-    (let [output-path (tutils/create-temp-csv-path)]
+    (let [output-path (io-utils/create-temp-csv-path)]
       (sampling-training-set empty-csv output-path {:max-sample-size 1000} :regression)
       (is (= 0 (tutils/count-csv-rows output-path)))))
   (testing "given an empty dataset and a :sample-size-percent config, when sampling, an empty dataset is produced"
-    (let [output-path (tutils/create-temp-csv-path)]
+    (let [output-path (io-utils/create-temp-csv-path)]
       (sampling-training-set empty-csv output-path {:sample-size-percent 55} :regression)
       (is (= 0 (tutils/count-csv-rows output-path))))))
-
-(deftest test-sample-weighting
-  (testing "filepath->sample-weights produces a coll of floats"
-    (let [weights (filepath->sample-weights tutils/dummy-example-weights-path)]
-      (is (every? float? weights)))))

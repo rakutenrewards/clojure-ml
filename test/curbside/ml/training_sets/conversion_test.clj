@@ -3,6 +3,7 @@
    [clojure.string :as string]
    [clojure.test :refer [deftest is testing]]
    [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.utils.io :as io-utils]
    [curbside.ml.utils.tests :as tutils]))
 
 (def an-empty-csv "label,a,b,c\n")
@@ -61,7 +62,7 @@
 
 (defn is-csv-to-maps-conversion-valid?
   [csv-content expected-maps]
-  (let [csv-path (tutils/create-temp-csv-path)]
+  (let [csv-path (io-utils/create-temp-csv-path)]
     (spit csv-path csv-content)
     (is (= expected-maps (conversion/csv-to-maps csv-path)))))
 
@@ -80,7 +81,7 @@
 
 (defn is-maps-to-csv-conversion-valid?
   [expected-csv-content maps column-keys]
-  (let [csv-path (tutils/create-temp-csv-path)]
+  (let [csv-path (io-utils/create-temp-csv-path)]
     (conversion/maps-to-csv csv-path column-keys maps)
     (is (= expected-csv-content (slurp csv-path)))))
 
@@ -101,6 +102,12 @@
     (is-maps-to-csv-conversion-valid? a-csv-with-ratios-converted-to-doubles
                                       some-maps-with-ratios
                                       [:label :a])))
+
+(deftest test-vector-to-csv
+  (let [path (io-utils/create-temp-csv-path)]
+    (conversion/vector-to-csv path "toto" [1 2 3])
+    (is (= "toto\n1\n2\n3\n"
+           (slurp path)))))
 
 (deftest test-feature-map-to-vector
   (testing "given a feature map, when converting to vector, only selected features are kept"
