@@ -38,15 +38,10 @@
    (->LabeledPoint label features)))
 
 (defn- ->DMatrix
-  [example-maps features training-set-encoding groups weights]
-  (let [labels (map :label example-maps)
-        vectors (->> example-maps
+  [{:keys [features feature-maps labels groups weights] :as _training-set} training-set-encoding]
+  (let [vectors (->> feature-maps
                      (map #(conversion/feature-map-to-vector features training-set-encoding %))
                      (map #(->LabeledPoint %1 %2) labels))
-        ;; When groups is specified, weights must have the same length as groups.
-        weights (or weights
-                    (when (some? groups)
-                      (repeat (count groups) 1.0)))
         dm (DMatrix. (.iterator vectors) nil)]
     (when (some? groups)
       (.setGroup dm (int-array groups)))
@@ -67,10 +62,6 @@
         last-indices (int-array (range split-count n))]
     [(.slice m first-indices) (.slice m last-indices)]))
 
-(defn- filepath->groups
-  [filepath]
-  (map :group (conversion/csv-to-maps filepath)))
-
 (defn train
   "Train an xgboost model on the provided training set. Accepts two maps.
 
@@ -88,18 +79,11 @@
 
   The second argument map is the hyperparameters of the models. See
   https://xgboost.readthedocs.io/en/latest/parameter.html#"
-  [{:keys [training-set-path
-           training-set-encoding
-           example-weights-path
-           example-groups-path]
-    :as _training-set-infos}
+  [training-set
+   training-set-encoding
    {:keys [early-stopping-rounds num-rounds validation-set-size]
     :as hyperparameters}]
-  (let [features (rest (conversion/csv-column-keys training-set-path))
-        examples (conversion/csv-to-maps training-set-path)
-        weights (when example-weights-path (sampling/filepath->sample-weights example-weights-path))
-        groups (when example-groups-path (filepath->groups example-groups-path))
-        dm (->DMatrix examples features training-set-encoding groups weights)
+  (let [dm (->DMatrix training-set training-set-encoding)
         [train val] (if (some? validation-set-size)
                       (split-DMatrix dm validation-set-size)
                       [dm nil])

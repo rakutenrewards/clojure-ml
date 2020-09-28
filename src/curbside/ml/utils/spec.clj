@@ -9,4 +9,4 @@
   [spec data]
   (if (spec/valid? spec data)
     true
-    (throw (IllegalArgumentException. (expound/expound-str type data)))))
+    (throw (IllegalArgumentException. (expound/expound-str spec data)))))

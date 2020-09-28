@@ -130,8 +130,3 @@
                    mean
                    stddev))
    maps))
-
-(defn filepath->sample-weights
-  "Load sample weights from a weights CSV filepath"
-  [filepath]
-  (map :weight (conversion/csv-to-maps filepath)))

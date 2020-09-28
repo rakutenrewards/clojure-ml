@@ -44,6 +44,7 @@
    [curbside.ml.utils.parsing :as parsing]
    [curbside.ml.utils.spec :as spec]
    [curbside.ml.training-sets.scaling :as scaling]
+   [curbside.ml.training-sets.training-set :as training-set]
    [curbside.ml.training-sets.conversion :as conversion])
   (:import
    (java.io File)
@@ -88,11 +89,9 @@
   (xgboost/load filepath))
 
 (defmethod train :xgboost
-  [_ predictor-type training-set-path params & [weights-path]]
-  (xgboost/train {:training-set-path training-set-path
-                  :training-set-encoding nil
-                  :example-weights-path weights-path
-                  :example-groups-path nil} ;; TODO support passing a group path and encoding-fns. This may result in breaking changes in the API
+  [_ predictor-type training-set-path params & [weights-path groups-path]]
+  (xgboost/train (training-set/load-csv-files training-set-path weights-path groups-path)
+                 nil ;; TODO support passing a the training-set encoding. This may result in breaking changes in the API
                  params))
 
 (defmethod predict :xgboost
@@ -218,14 +217,6 @@
        (predict algorithm predictor-type model selected-features hyperparameters)
        (unscale-label label-scaling-fns scaling-factors)))
 
-(defn- to-temp-csv-path
-  [header rows]
-  (let [file (doto (File/createTempFile "data_" ".csv")
-               (.deleteOnExit))]
-    (with-open [w (io/writer file)]
-      (csv/write-csv w (concat [header] rows)))
-    (.getPath file)))
-
 (defn- classify
   [actual predicted]
   (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
@@ -245,9 +236,8 @@
            :square-error 0
            :n 0
            :predictions []}
-          (for [[label & features] validation-set]
-              (let [features-map (into {} (map vector selected-features features))
-                    predicted-value (infer algorithm predictor-type model selected-features hyperparameters features-map
+          (for [[label feature-map] (map vector (:labels validation-set) (:feature-maps validation-set))]
+              (let [predicted-value (infer algorithm predictor-type model selected-features hyperparameters feature-map
                                            :scaling-factors scaling-factors
                                            :feature-scaling-fns nil ;; The features are already scaled in the training set.
                                            :label-scaling-fns label-scaling-fns)
@@ -261,95 +251,36 @@
 
 (defn- train-and-evaluate
   [algorithm selected-features hyperparameters label-scaling-fns scaling-factors
-   training-csv-path training-weights-path validation-set predictor-type]
-  (let [model (train algorithm predictor-type training-csv-path hyperparameters training-weights-path)
-        evaluation_result (evaluate-using-model model algorithm selected-features validation-set predictor-type hyperparameters
+   training-set validation-set predictor-type]
+  (let [{:keys [training-set-path weights-path groups-path]} (training-set/save-temp-csv-files training-set)
+        model (train algorithm predictor-type training-set-path hyperparameters weights-path groups-path)
+        evaluation-result (evaluate-using-model model algorithm selected-features validation-set predictor-type hyperparameters
                                                 scaling-factors label-scaling-fns)]
     (dispose algorithm model)
-    evaluation_result))
-
-(defn- zip
-  [xs ys]
-  (map vector xs ys))
-
-(defn- unzip
-  [xs]
-  [(map first xs) (map second xs)])
-
-(defn- load-weights
-  "Loads the weights file, if it can be found and is non-empty. If not, return
-   constant weights of the same length as the training set."
-  [training-set example-weights-path]
-  (if (and example-weights-path (.exists (io/file example-weights-path)))
-    (with-open [in-file (io/reader example-weights-path)]
-      (let [[_header & weights] (csv/read-csv in-file)]
-        (if (not= (count weights) (count training-set))
-          (throw (Exception. "Weights file is not the same length as training set file!"))
-          weights)))
-    (repeat (count training-set) ["1.0"])))
-
-(defn- train-test-split
-  "Produce the dataset splits between train and validate using the given % split"
-  [training-set-path example-weights-path train-split-percentage]
-  (let [[header & training-set] (with-open [in-file (io/reader training-set-path)]
-                                  (doall
-                                   (csv/read-csv in-file)))
-        weights (load-weights training-set example-weights-path)
-        total-length (count training-set)
-        train-set-size (Math/ceil (/ (* total-length train-split-percentage) 100))
-        validation-set-size (- total-length train-set-size)
-        shuffled-set (shuffle (zip training-set weights))
-        training-subset (take train-set-size shuffled-set)
-        validation-subset (take-last validation-set-size shuffled-set)
-        [validation-set _] (unzip validation-subset)
-        training-csv-path (to-temp-csv-path header (map (partial map first) training-subset))
-        training-weights-path (to-temp-csv-path ["weight"] (map (partial map second) training-subset))]
-    [{:training-weights-path training-weights-path :training-csv-path training-csv-path :validation-set validation-set}]))
-
-(defn- k-fold-split
-  "Produce the dataset splits using to do k-fold cross validation"
-  [training-set-path example-weights-path k-folds]
-  (let [[header & training-set] (with-open [in-file (io/reader training-set-path)]
-                                  (doall
-                                   (csv/read-csv in-file)))
-        weights (load-weights training-set example-weights-path)
-        folds (partition-all (/ (count training-set) k-folds) (shuffle (zip training-set weights)))
-        evaluation-splits   (loop [processed-folds 1
-                                   [validation-set validation-weights] (unzip (first folds))
-                                   training-set-folds (rest folds)
-                                   result []]
-                              (if (<= processed-folds k-folds)
-                                (let [training-csv-path (to-temp-csv-path header (apply concat (map (partial map first) training-set-folds)))
-                                      training-weights-path (to-temp-csv-path ["weight"] (apply concat (map (partial map second) training-set-folds)))]
-                                  (recur (inc processed-folds)
-                                         (unzip (first training-set-folds))
-                                         (conj (rest training-set-folds) (zip validation-set validation-weights))
-                                         (conj result {:training-weights-path training-weights-path :training-csv-path training-csv-path :validation-set validation-set})))
-                                result))]
-    evaluation-splits))
+    evaluation-result))
 
 (defn- create-train-validate-splits
   "Given a dataset and the type of split to be used, produce a vector of train and
   validation sets to be evaluated."
-  [evaluate-options training-set-path example-weights-path]
+  [evaluate-options training-set]
   (case (:type evaluate-options)
-    :train-test-split (train-test-split training-set-path example-weights-path (:train-split-percentage evaluate-options))
-    :k-fold (k-fold-split training-set-path example-weights-path (:folds evaluate-options))))
+    :train-test-split [(training-set/train-test-split training-set true (:train-split-percentage evaluate-options))]
+    :k-fold (training-set/k-fold-split training-set true (:folds evaluate-options))))
 
 (defn evaluate
   "Either cross validation or validation using a held out test set"
   [algorithm predictor-type selected-features hyperparameters training-set-path evaluate-options
-   & {:keys [scaling-factors label-scaling-fns example-weights-path]}]
-  (let [splits-to-evaluate (create-train-validate-splits evaluate-options training-set-path example-weights-path)
+   & {:keys [scaling-factors label-scaling-fns example-weights-path example-groups-path]}]
+  (let [training-set (training-set/load-csv-files training-set-path example-weights-path example-groups-path)
+        splits-to-evaluate (create-train-validate-splits evaluate-options training-set)
         metrics (->> splits-to-evaluate
-                     (pmap (fn [{:keys [training-csv-path training-weights-path validation-set]}]
+                     (pmap (fn [[training-set validation-set]]
                              (train-and-evaluate algorithm
                                                  selected-features
                                                  hyperparameters
                                                  label-scaling-fns
                                                  scaling-factors
-                                                 training-csv-path
-                                                 training-weights-path
+                                                 training-set
                                                  validation-set
                                                  predictor-type)))
                      (doall)
@@ -499,7 +430,7 @@
   hyperparameters found by the provided `hyperparameter-search-fn`."
   [algorithm predictor-type selected-features hardcoded-hyperparameters hyperparameter-search-fn hyperparameter-search-space training-set-path evaluate-options
    & {:keys [selection-metric threads-pool scaling-factors feature-scaling-fns
-             label-scaling-fns example-weights-path]}]
+             label-scaling-fns example-weights-path example-groups-path]}]
   {:pre [(spec/check ::algorithm algorithm)
          (spec/check ::predictor-type predictor-type)
          (spec/check ::hyperparameters hardcoded-hyperparameters)
@@ -523,7 +454,8 @@
                                        :scaling-factors scaling-factors
                                        :feature-scaling-fns feature-scaling-fns
                                        :label-scaling-fns label-scaling-fns
-                                       :example-weights-path example-weights-path)]
+                                       :example-weights-path example-weights-path
+                                       :example-groups-path example-groups-path)]
                  {:optimal-params hyperparameters
                   :selected-evaluation (get metrics selection-metric)
                   :model-evaluations metrics}))
