@@ -102,7 +102,7 @@
               hyperparameter-search-fn {:type :random :iteration-count 10}
               evaluate-options {:type :train-test-split :train-split-percentage 80}
               {:keys [optimal-params]} (models/optimize-hyperparameters :xgboost
-                                                                        :regression
+                                                                        :ranking
                                                                         ["lat" "lng"]
                                                                         hyperparameters
                                                                         hyperparameter-search-fn

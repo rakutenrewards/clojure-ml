@@ -67,16 +67,27 @@
   [confusion-matrix]
   (/ (incorrectly-classified confusion-matrix) (.total confusion-matrix)))
 
+(defn mean
+  [xs]
+  (/ (apply + xs)
+     (count xs)))
+
+(defn- absolute-error
+  [prediction label]
+  (Math/abs (- prediction label)))
+
+(defn- square-error
+  [prediction label]
+  (Math/pow (- prediction label) 2))
+
 (defn mean-absolute-error
-  "Calculate the mean absolute error of a classification or regression task. `n`
-  is the number of predictions. `sum-absolute-error` is the number of the
-  absolute error between the observed and actual prediction"
-  [n sum-absolute-error]
-  (/ sum-absolute-error n))
+  "Calculate the mean absolute error of a regression model"
+  [predictions labels]
+  {:pre [(= (count predictions) (count labels))]}
+  (mean (map absolute-error predictions labels)))
 
 (defn root-mean-square-error
-  "Calculate the root mean square error of a classification or regression task.
-  `n` is the number of predictions. `sum-square-error` is the number of the
-  absolute error between the observed and actual prediction"
-  [n sum-square-error]
-  (Math/sqrt (/ sum-square-error n)))
+  "Calculate the root mean square error of a regression model"
+  [predictions labels]
+  {:pre [(= (count predictions) (count labels))]}
+  (Math/sqrt (mean (map square-error predictions labels))))

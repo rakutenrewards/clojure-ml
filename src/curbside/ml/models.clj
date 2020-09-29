@@ -200,6 +200,10 @@
     (scaling/unscale-label label-scaling-fns scaling-factors prediction)
     prediction))
 
+(defn- classify
+  [predicted]
+  (NominalPrediction. predicted (NominalPrediction/makeDistribution predicted 2)))
+
 (defn infer
   "This function performs the inference steps to perform predictions using a
   single trained model. It includes data preparation and post-processing
@@ -215,49 +219,25 @@
        (feature-scaling feature-scaling-fns scaling-factors)
        (conversion/feature-map-to-vector selected-features)
        (predict algorithm predictor-type model selected-features hyperparameters)
+       (#(if (= predictor-type :classification)
+           (classify %)
+           %))
        (unscale-label label-scaling-fns scaling-factors)))
 
-(defn- classify
-  [actual predicted]
-  (NominalPrediction. actual (NominalPrediction/makeDistribution predicted 2)))
+(defn- infer-batch
+  [algorithm predictor-type model selected-features hyperparameters feature-maps & args]
+  (mapv #(apply infer algorithm predictor-type model selected-features hyperparameters % args)
+        feature-maps))
 
-(defn- evaluate-using-model
-  "Given a model and all the details about features/labels, generate evaluation metrics
-  for the given labels using the model."
-  [model algorithm selected-features validation-set predictor-type hyperparameters
-   scaling-factors label-scaling-fns]
-  (reduce (fn [agg [abs-error square-error predictions]]
-            (-> agg
-                (update :abs-error + abs-error)
-                (update :square-error + square-error)
-                (update :n inc)
-                (update :predictions conj predictions)))
-          {:abs-error 0
-           :square-error 0
-           :n 0
-           :predictions []}
-          (for [[label feature-map] (map vector (:labels validation-set) (:feature-maps validation-set))]
-              (let [predicted-value (infer algorithm predictor-type model selected-features hyperparameters feature-map
-                                           :scaling-factors scaling-factors
-                                           :feature-scaling-fns nil ;; The features are already scaled in the training set.
-                                           :label-scaling-fns label-scaling-fns)
-                    prediction (if (= predictor-type :classification)
-                                 (classify (Double/parseDouble label) predicted-value))
-                    unscaled-label (unscale-label label-scaling-fns scaling-factors (parsing/parse-double label))
-                    diff (- unscaled-label predicted-value)
-                    abs-error (Math/abs diff)
-                    square-error (* diff diff)]
-                [abs-error square-error prediction]))))
-
-(defn- train-and-evaluate
-  [algorithm selected-features hyperparameters label-scaling-fns scaling-factors
-   training-set validation-set predictor-type]
+(defn- train-and-infer
+  [algorithm predictor-type selected-features hyperparameters
+   scaling-factors label-scaling-fns training-set validation-set]
   (let [{:keys [training-set-path weights-path groups-path]} (training-set/save-temp-csv-files training-set)
         model (train algorithm predictor-type training-set-path hyperparameters weights-path groups-path)
-        evaluation-result (evaluate-using-model model algorithm selected-features validation-set predictor-type hyperparameters
-                                                scaling-factors label-scaling-fns)]
+        predictions (infer-batch algorithm predictor-type model selected-features hyperparameters (:feature-maps validation-set)
+                                          :scaling-factors scaling-factors :label-scaling-fns label-scaling-fns)]
     (dispose algorithm model)
-    evaluation-result))
+    predictions))
 
 (defn- create-train-validate-splits
   "Given a dataset and the type of split to be used, produce a vector of train and
@@ -273,24 +253,22 @@
    & {:keys [scaling-factors label-scaling-fns example-weights-path example-groups-path]}]
   (let [training-set (training-set/load-csv-files training-set-path example-weights-path example-groups-path)
         splits-to-evaluate (create-train-validate-splits evaluate-options training-set)
-        metrics (->> splits-to-evaluate
-                     (pmap (fn [[training-set validation-set]]
-                             (train-and-evaluate algorithm
-                                                 selected-features
-                                                 hyperparameters
-                                                 label-scaling-fns
-                                                 scaling-factors
-                                                 training-set
-                                                 validation-set
-                                                 predictor-type)))
-                     (doall)
-                     (reduce (fn [agg {:keys [abs-error square-error n predictions]}]
-                               (-> agg
-                                   (update :abs-error + abs-error)
-                                   (update :square-error + square-error)
-                                   (update :n #(+ % n))
-                                   (update :predictions concat predictions)))))]
-    (metrics/model-metrics predictor-type metrics)))
+        predictions+labels (->> splits-to-evaluate
+                                (pmap (fn [[training-set validation-set]]
+                                        (map vector
+                                             (train-and-infer algorithm
+                                                              predictor-type
+                                                              selected-features
+                                                              hyperparameters
+                                                              scaling-factors
+                                                              label-scaling-fns
+                                                              training-set
+                                                              validation-set)
+                                             (:labels validation-set))))
+                                (apply concat))]
+    (metrics/model-metrics predictor-type
+                           (map first predictions+labels)
+                           (map second predictions+labels))))
 
 (def supported-evaluate-types #{:train-test-split :k-fold})
 

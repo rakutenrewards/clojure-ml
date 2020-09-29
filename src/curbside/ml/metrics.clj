@@ -21,41 +21,54 @@
                              Ranker)
     (java.util ArrayList)))
 
-(defn model-metrics
-  "Calculate all the metrics given a map containing vector of predictions, abs-error
-  and square-error. Return a map of the computed metrics."
-  [predictor-type eval-metrics]
-  (let [{:keys [predictions abs-error square-error n]} eval-metrics
-        predictions (if (every? nil? predictions) (ArrayList. []) (ArrayList. predictions))
+(defn- model-metrics-regression
+  [predictions labels]
+  {:mean-absolute-error (stats/mean-absolute-error predictions labels)
+   :root-mean-square-error (stats/root-mean-square-error predictions labels)
+   :total-number-instances (double (count predictions))})
+
+(defn- model-metrics-classification
+  [predictions labels]
+  (let [predictions (if (every? nil? predictions) (ArrayList. []) (ArrayList. predictions))
         confusion-matrix (ConfusionMatrix. (into-array String ["1.0" "0.0"]))
         _ (.addPredictions confusion-matrix predictions)
         two-classes-stats (.getTwoClassStats confusion-matrix 1)
         threshold-curve (ThresholdCurve.)
         instances (.getCurve threshold-curve predictions)]
-    (merge {:mean-absolute-error (stats/mean-absolute-error n abs-error)
-            :root-mean-square-error (stats/root-mean-square-error n square-error)
-            :total-number-instances (double n)}
-           (when (= predictor-type :classification)
-             {:tp (parsing/nan->nil (.getTruePositive two-classes-stats))
-              :fp (parsing/nan->nil (.getFalsePositive two-classes-stats))
-              :tn (parsing/nan->nil (.getTrueNegative two-classes-stats))
-              :fn (parsing/nan->nil (.getFalseNegative two-classes-stats))
-              :recall (parsing/nan->nil (.getRecall two-classes-stats))
-              :precision (parsing/nan->nil (.getPrecision two-classes-stats))
-              :fpr (parsing/nan->nil (.getFalsePositiveRate two-classes-stats))
-              :tpr (parsing/nan->nil (.getTruePositiveRate two-classes-stats))
-              :accuracy (parsing/nan->nil
-                         (/ (+ (.getTruePositive two-classes-stats) (.getTrueNegative two-classes-stats))
-                            (+ (.getTruePositive two-classes-stats) (.getTrueNegative two-classes-stats)
-                               (.getTrueNegative two-classes-stats) (.getFalseNegative two-classes-stats))))
-              :f1 (parsing/nan->nil (.getFMeasure two-classes-stats))
-              :roc-auc (parsing/nan->nil (ThresholdCurve/getROCArea instances))
-              :auprc (parsing/nan->nil (ThresholdCurve/getPRCArea instances))
-              :kappa (parsing/nan->nil (stats/kappa confusion-matrix))
-              :incorrectly-classified-instances (parsing/nan->nil (stats/incorrectly-classified confusion-matrix))
+    (merge (model-metrics-regression predictions labels)
+           {:tp (parsing/nan->nil (.getTruePositive two-classes-stats))
+            :fp (parsing/nan->nil (.getFalsePositive two-classes-stats))
+            :tn (parsing/nan->nil (.getTrueNegative two-classes-stats))
+            :fn (parsing/nan->nil (.getFalseNegative two-classes-stats))
+            :recall (parsing/nan->nil (.getRecall two-classes-stats))
+            :precision (parsing/nan->nil (.getPrecision two-classes-stats))
+            :fpr (parsing/nan->nil (.getFalsePositiveRate two-classes-stats))
+            :tpr (parsing/nan->nil (.getTruePositiveRate two-classes-stats))
+            :accuracy (parsing/nan->nil
+                       (/ (+ (.getTruePositive two-classes-stats) (.getTrueNegative two-classes-stats))
+                          (+ (.getTruePositive two-classes-stats) (.getTrueNegative two-classes-stats)
+                             (.getTrueNegative two-classes-stats) (.getFalseNegative two-classes-stats))))
+            :f1 (parsing/nan->nil (.getFMeasure two-classes-stats))
+            :roc-auc (parsing/nan->nil (ThresholdCurve/getROCArea instances))
+            :auprc (parsing/nan->nil (ThresholdCurve/getPRCArea instances))
+            :kappa (parsing/nan->nil (stats/kappa confusion-matrix))
+            :incorrectly-classified-instances (parsing/nan->nil (stats/incorrectly-classified confusion-matrix))
 
-              :correctly-classified-instances (parsing/nan->nil (stats/correctly-classified confusion-matrix))
-              :correctly-classified-instances-percent (parsing/nan->nil (stats/correctly-classified-percent confusion-matrix))}))))
+            :correctly-classified-instances (parsing/nan->nil (stats/correctly-classified confusion-matrix))
+            :correctly-classified-instances-percent (parsing/nan->nil (stats/correctly-classified-percent confusion-matrix))})))
+
+(defn- model-metrics-ranking
+  [predictions labels]
+  (model-metrics-regression predictions labels))
+
+(defn model-metrics
+  "Calculate all the metrics given a map containing vector of predictions, abs-error
+  and square-error. Return a map of the computed metrics."
+  [predictor-type predictions labels]
+  (case predictor-type
+    :classification (model-metrics-classification predictions labels)
+    :ranking (model-metrics-ranking predictions labels)
+    :regression (model-metrics-regression predictions labels)))
 
 (defn comparator
   "Returns the comparator to use to compare a metrics' results to optimize its
