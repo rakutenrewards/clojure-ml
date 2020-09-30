@@ -67,9 +67,23 @@
   [confusion-matrix]
   (/ (incorrectly-classified confusion-matrix) (.total confusion-matrix)))
 
+(defn kahan-sum
+  "Sums `xs` while compensating the accumulation of floating-point errors.
+  See https://en.wikipedia.org/wiki/Kahan_summation_algorithm and
+  http://adereth.github.io/blog/2013/10/10/add-it-up/"
+  [xs]
+  (loop [[x & xs] xs
+         sum 0.0
+         carry 0.0]
+    (if-not x
+      sum
+      (let [y (- x carry)
+            t (+ y sum)]
+        (recur xs t (- t sum y))))))
+
 (defn mean
   [xs]
-  (/ (apply + xs)
+  (/ (kahan-sum xs)
      (count xs)))
 
 (defn- absolute-error
