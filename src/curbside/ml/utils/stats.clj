@@ -67,16 +67,41 @@
   [confusion-matrix]
   (/ (incorrectly-classified confusion-matrix) (.total confusion-matrix)))
 
+(defn kahan-sum
+  "Sums `xs` while compensating the accumulation of floating-point errors.
+  See https://en.wikipedia.org/wiki/Kahan_summation_algorithm and
+  http://adereth.github.io/blog/2013/10/10/add-it-up/"
+  [xs]
+  (loop [[x & xs] xs
+         sum 0.0
+         carry 0.0]
+    (if-not x
+      sum
+      (let [y (- x carry)
+            t (+ y sum)]
+        (recur xs t (- t sum y))))))
+
+(defn mean
+  [xs]
+  (/ (kahan-sum xs)
+     (count xs)))
+
+(defn- absolute-error
+  [prediction label]
+  (Math/abs (- prediction label)))
+
+(defn- square-error
+  [prediction label]
+  (Math/pow (- prediction label) 2))
+
 (defn mean-absolute-error
-  "Calculate the mean absolute error of a classification or regression task. `n`
-  is the number of predictions. `sum-absolute-error` is the number of the
-  absolute error between the observed and actual prediction"
-  [n sum-absolute-error]
-  (/ sum-absolute-error n))
+  "Calculate the mean absolute error of a regression model"
+  [predictions labels]
+  {:pre [(= (count predictions) (count labels))]}
+  (mean (map absolute-error predictions labels)))
 
 (defn root-mean-square-error
-  "Calculate the root mean square error of a classification or regression task.
-  `n` is the number of predictions. `sum-square-error` is the number of the
-  absolute error between the observed and actual prediction"
-  [n sum-square-error]
-  (Math/sqrt (/ sum-square-error n)))
+  "Calculate the root mean square error of a regression model"
+  [predictions labels]
+  {:pre [(= (count predictions) (count labels))]}
+  (Math/sqrt (mean (map square-error predictions labels))))
