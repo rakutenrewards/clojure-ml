@@ -253,22 +253,20 @@
    & {:keys [scaling-factors label-scaling-fns example-weights-path example-groups-path]}]
   (let [training-set (training-set/load-csv-files training-set-path example-weights-path example-groups-path)
         splits-to-evaluate (create-train-validate-splits evaluate-options training-set)
-        predictions+labels (->> splits-to-evaluate
-                                (pmap (fn [[training-set validation-set]]
-                                        (map vector
-                                             (train-and-infer algorithm
-                                                              predictor-type
-                                                              selected-features
-                                                              hyperparameters
-                                                              scaling-factors
-                                                              label-scaling-fns
-                                                              training-set
-                                                              validation-set)
-                                             (:labels validation-set))))
-                                (apply concat))]
-    (metrics/model-metrics predictor-type
-                           (map first predictions+labels)
-                           (map second predictions+labels))))
+        validation-sets (map second splits-to-evaluate)
+        predictions (->> splits-to-evaluate
+                         (pmap (fn [[training-set validation-set]]
+                                 (train-and-infer algorithm
+                                                  predictor-type
+                                                  selected-features
+                                                  hyperparameters
+                                                  scaling-factors
+                                                  label-scaling-fns
+                                                  training-set
+                                                  validation-set)))
+                         (apply concat))]
+    (metrics/model-metrics predictor-type predictions
+                           (apply training-set/concat-training-sets validation-sets))))
 
 (def supported-evaluate-types #{:train-test-split :k-fold})
 
@@ -403,6 +401,13 @@
               #(into {} (map (fn [[key value]] [key (random-value value)])
                              hyperparameter-search-space))))
 
+(defn- default-selection-metric
+  [predictor-type]
+  (case predictor-type
+    :classification :root-mean-square-error
+    :regression :root-mean-square-error
+    :ranking :ndcg-2))
+
 (defn optimize-hyperparameters
   "This function is responsible for training a model with the best
   hyperparameters found by the provided `hyperparameter-search-fn`."
@@ -415,7 +420,7 @@
          (spec/check (s/nilable ::hyperparameter-search-fn) hyperparameter-search-fn)
          (spec/check ::hyperparameter-search-space hyperparameter-search-space)]}
   (let [hyperparameter-search-fn (or hyperparameter-search-fn {:type :grid})
-        selection-metric (or selection-metric :root-mean-square-error)
+        selection-metric (or selection-metric (default-selection-metric predictor-type))
         thread-count (or threads-pool 1)
         combos (case (:type hyperparameter-search-fn)
                  :grid (grid-search-combos hyperparameter-search-space)

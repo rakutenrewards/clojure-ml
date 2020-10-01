@@ -1,7 +1,9 @@
 (ns curbside.ml.utils.stats-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.utils.stats :as stats])
+   [conjure.core :as conjure]
+   [curbside.ml.utils.stats :as stats]
+   [curbside.ml.utils.tests :as tutils])
   (:import
    (java.util ArrayList)
    (weka.classifiers.evaluation ConfusionMatrix NominalPrediction)))
@@ -67,3 +69,44 @@
     (is (= (stats/correctly-classified-percent (get-test-confusion-matrix-1)) 0.6862745098039216))
     (is (= (stats/incorrectly-classified (get-test-confusion-matrix-1)) 16.0))
     (is (= (stats/incorrectly-classified-percent (get-test-confusion-matrix-1)) 0.3137254901960784))))
+
+(deftest test-discounted-cummulative-gain
+  ;; Example from https://en.wikipedia.org/wiki/Discounted_cumulative_gain
+  (is (tutils/approx= 6.861 (stats/discounted-cummulative-gain [3 2 3 0 1 2]) 1e-3)))
+
+(deftest test-normalized-discounted-cummulative-gain
+  ;; Example from https://en.wikipedia.org/wiki/Discounted_cumulative_gain
+  (is (tutils/approx= 0.961 (stats/normalized-discounted-cummulative-gain
+                             [0.1 0.4 0.3 0.2 0.5 0.0]
+                             [1 2 3 0 3 2])
+                      1e-3))
+  (is (tutils/approx= 0.871 (stats/normalized-discounted-cummulative-gain 2
+                             [0.5 0.4 0.3 0.2 0.1 0.0]
+                             [3 2 3 0 1 2])
+                      1e-3)))
+
+(deftest test-ranking-cosine-similarity
+  (testing "given two identical vectors, then the similarity is 1"
+    (is (== 1 (#'stats/ranking-cosine-similarity 2 [0 0 0 2 3] [0 0 0 2 3]))))
+  (testing "given two different vectors, then the similarity is 0"
+    (is (zero? (#'stats/ranking-cosine-similarity 2 [1 1 0 0 0] [0 0 0 2 3]))))
+  (testing "given two similar vectors, then the right similarity value is returned"
+    (is (== (/ 1 2) (#'stats/ranking-cosine-similarity 2 [0 0 0 2 3] [2 0 0 1 0])))))
+
+(deftest test-ranking-personalization
+  (testing "given all different vectors, then the personalization is 1.0"
+    (is (== 1
+            (stats/ranking-personalization 2 [[0.0 0.1 0.2 0.3]
+                                              [0.3 0.2 0.1 0.0]]))))
+  (testing "given all equal vectors, then the personalization is 0.0"
+    (is (zero? (stats/ranking-personalization 2 [[0.0 0.1 0.2 0.3]
+                                                 [0.0 0.1 0.2 0.3]]))))
+  (testing "given some vectors, then the right personalization score is returned"
+    (conjure/instrumenting [stats/ranking-cosine-similarity]
+      (is (tutils/approx= 0.58333
+                          (stats/ranking-personalization 2 [[0.0 0.1 0.2 0.3]
+                                                            [0.0 0.1 0.2 0.3]
+                                                            [0.3 0.1 0.2 0.0]
+                                                            [0.3 0.1 0.0 0.0]])
+                          1e-5))
+      (conjure/verify-call-times-for stats/ranking-cosine-similarity 6))))
