@@ -406,7 +406,7 @@
   (case predictor-type
     :classification :root-mean-square-error
     :regression :root-mean-square-error
-    :ranking :ndcg-2))
+    :ranking :ndcg))
 
 (defn optimize-hyperparameters
   "This function is responsible for training a model with the best

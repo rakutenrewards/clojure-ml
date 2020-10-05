@@ -114,12 +114,14 @@
                                                           tutils/dummy-ranking-training-set-groups-path)]
           (verify-call-times-for models/random-search-combos 1)
           (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
-          (is (= {:ndcg-2 1.0
-                  :ndcg-5 1.0
-                  :precision-2 0.5
-                  :precision-5 0.5
-                  :personalization-2 0.0
-                  :personalization-5 0.6} model-evaluations))
+          (is (= {:ndcg 1.0
+                  :ndcg-at-3 1.0
+                  :ndcg-at-5 1.0
+                  :precision-at-3 0.5
+                  :precision-at-5 0.5
+                  :personalization-at-3 2.220446049250313e-16
+                  :personalization-at-5 2.220446049250313e-16}
+                 model-evaluations))
           (is (= {:num-rounds 5
                   :max_depth 5
                   :learning_rate 0.99

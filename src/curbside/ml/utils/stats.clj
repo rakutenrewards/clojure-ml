@@ -113,7 +113,7 @@
   (/ (Math/log x)
      (Math/log 2)))
 
-(defn discounted-cummulative-gain
+(defn discounted-cumulative-gain
   [xs]
   (->> xs
        (map-indexed (fn [i x]
@@ -130,21 +130,21 @@
        (map second)
        (take k)))
 
-(defn normalized-discounted-cummulative-gain
+(defn normalized-discounted-cumulative-gain
   "Computes the normalized discounted cumulative gain. `predictions` are relevance
   scores estimated by a model, and `labels` are ground truth scores. In its
   three-arity version, the function accepts `k` as its first argument,
   indicating to only consider the top-k scores in the ranking. Returns a value
   between 0 and 1."
+  ([predictions labels]
+   (normalized-discounted-cumulative-gain
+    (count predictions) predictions labels))
   ([k predictions labels]
    {:pre [(= (count predictions) (count labels))]}
    (let [sorted-labels (top-k-labels k predictions labels)
          ideal-labels (take k (sort > labels))]
-     (/ (discounted-cummulative-gain sorted-labels)
-        (discounted-cummulative-gain ideal-labels))))
-  ([predictions labels]
-   (normalized-discounted-cummulative-gain
-    (count predictions) predictions labels)))
+     (/ (discounted-cumulative-gain sorted-labels)
+        (discounted-cumulative-gain ideal-labels)))))
 
 (defn ranking-precision
   "Returns the fraction of `predictions` in the top-`k` that are relevant, which
@@ -174,8 +174,10 @@
         indices-2 (top-k-indices k predictions-2)
         dot-product (count (set/intersection
                             (set indices-1)
-                            (set indices-2)))]
-    (/ dot-product k)))
+                            (set indices-2)))
+        denum (* (Math/sqrt (count indices-1))
+                 (Math/sqrt (count indices-2)))] ;; Should be k most of the time, when k > | predictions |.
+    (/ dot-product denum)))
 
 (defn ranking-personalization
   "Evaluates the personalization of ranking predictions. Accepts a matrix of

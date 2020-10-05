@@ -69,20 +69,22 @@
   [predictions {:keys [labels groups] :as _training-set}]
   (let [prediction-groups (partition-by-groups groups predictions)
         label-groups (partition-by-groups groups labels)]
-    {:ndcg-2 (stats/mean (map (partial stats/normalized-discounted-cummulative-gain 2)
+    {:ndcg (stats/mean (map stats/normalized-discounted-cumulative-gain
+                            prediction-groups label-groups))
+     :ndcg-at-3 (stats/mean (map (partial stats/normalized-discounted-cumulative-gain 3)
                               prediction-groups label-groups))
-     :ndcg-5 (stats/mean (map (partial stats/normalized-discounted-cummulative-gain 5)
+     :ndcg-at-5 (stats/mean (map (partial stats/normalized-discounted-cumulative-gain 5)
                               prediction-groups label-groups))
-     :precision-2 (stats/mean (map (partial stats/ranking-precision 2)
+     :precision-at-3 (stats/mean (map (partial stats/ranking-precision 3)
                                    prediction-groups label-groups))
-     :precision-5 (stats/mean (map (partial stats/ranking-precision 5)
+     :precision-at-5 (stats/mean (map (partial stats/ranking-precision 5)
                                    prediction-groups label-groups))
-     :personalization-2 (stats/ranking-personalization 2 (partition-by-groups groups predictions))
-     :personalization-5 (stats/ranking-personalization 5 (partition-by-groups groups predictions))}))
+     :personalization-at-3 (stats/ranking-personalization 3 (partition-by-groups groups predictions))
+     :personalization-at-5 (stats/ranking-personalization 5 (partition-by-groups groups predictions))}))
 
 (defn model-metrics
-  "Calculate all the metrics given a vector `predictions` made a `training-set`.
-  Return a map of the computed metrics."
+  "Calculate all the metrics given a vector of `predictions` made from a
+  `training-set`. Return a map of the computed metrics."
   [predictor-type predictions training-set]
   {:pre [(spec-utils/check ::training-set/training-set training-set)]}
   (case predictor-type
