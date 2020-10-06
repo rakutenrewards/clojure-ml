@@ -206,9 +206,10 @@
   elements tell what fraction of the training-set to distribute is in each
   split.
 
-  Training sets having a group vector are split across group, while
-  training sets without group vectors are split across examples. `shuffle?`
-  indicate whether or not to shuffle examples (or groups) of the training set."
+  Training sets having a group vector are split across group, while training
+  sets without group vectors are split across examples. `shuffle?` indicate
+  whether or not to shuffle examples (or groups) of the training set. The order
+  of the examples within a group won't be affected."
   [{:keys [feature-maps groups] :as training-set} shuffle? fractions]
   {:pre [(fractions-sum-to-one? fractions)]}
   (if (some? groups)
@@ -217,7 +218,7 @@
     (map #(select-examples training-set %)
          (indices-of-splits (count feature-maps) shuffle? fractions))))
 
-(defn- concat-training-sets
+(defn concat-training-sets
   [& ts]
   (let [features (:features (first ts))]
     (-> (apply merge-with into ts)

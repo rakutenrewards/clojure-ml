@@ -3,6 +3,7 @@
   (:require
    [clojure.spec.alpha :as s]
    [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.training-sets.training-set :as training-set]
    [curbside.ml.utils.spec :as spec-utils]
    [curbside.ml.utils.stats :as stats]
    [curbside.ml.utils.parsing :as parsing]
@@ -57,18 +58,39 @@
             :correctly-classified-instances (parsing/nan->nil (stats/correctly-classified confusion-matrix))
             :correctly-classified-instances-percent (parsing/nan->nil (stats/correctly-classified-percent confusion-matrix))})))
 
+(defn- partition-by-groups
+  [groups xs]
+  (when-let [g (first groups)]
+    (let [[x-group others] (split-at g xs)]
+      (cons x-group
+            (lazy-seq (partition-by-groups (rest groups) others))))))
+
 (defn- model-metrics-ranking
-  [predictions labels]
-  (model-metrics-regression predictions labels))
+  [predictions {:keys [labels groups] :as _training-set}]
+  (let [prediction-groups (partition-by-groups groups predictions)
+        label-groups (partition-by-groups groups labels)]
+    {:ndcg (stats/mean (map stats/normalized-discounted-cumulative-gain
+                            prediction-groups label-groups))
+     :ndcg-at-3 (stats/mean (map (partial stats/normalized-discounted-cumulative-gain 3)
+                              prediction-groups label-groups))
+     :ndcg-at-5 (stats/mean (map (partial stats/normalized-discounted-cumulative-gain 5)
+                              prediction-groups label-groups))
+     :precision-at-3 (stats/mean (map (partial stats/ranking-precision 3)
+                                   prediction-groups label-groups))
+     :precision-at-5 (stats/mean (map (partial stats/ranking-precision 5)
+                                   prediction-groups label-groups))
+     :personalization-at-3 (stats/ranking-personalization 3 (partition-by-groups groups predictions))
+     :personalization-at-5 (stats/ranking-personalization 5 (partition-by-groups groups predictions))}))
 
 (defn model-metrics
-  "Calculate all the metrics given a map containing vector of predictions, abs-error
-  and square-error. Return a map of the computed metrics."
-  [predictor-type predictions labels]
+  "Calculate all the metrics given a vector of `predictions` made from a
+  `training-set`. Return a map of the computed metrics."
+  [predictor-type predictions training-set]
+  {:pre [(spec-utils/check ::training-set/training-set training-set)]}
   (case predictor-type
-    :classification (model-metrics-classification predictions labels)
-    :ranking (model-metrics-ranking predictions labels)
-    :regression (model-metrics-regression predictions labels)))
+    :classification (model-metrics-classification predictions (:labels training-set))
+    :ranking (model-metrics-ranking predictions training-set)
+    :regression (model-metrics-regression predictions (:labels training-set))))
 
 (defn comparator
   "Returns the comparator to use to compare a metrics' results to optimize its

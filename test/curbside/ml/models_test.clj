@@ -101,17 +101,31 @@
         (let [hyperparameters {:num-rounds 5 :max_depth 5 :learning_rate 0.99 :objective "rank:ndcg"}
               hyperparameter-search-fn {:type :random :iteration-count 10}
               evaluate-options {:type :train-test-split :train-split-percentage 80}
-              {:keys [optimal-params]} (models/optimize-hyperparameters :xgboost
-                                                                        :ranking
-                                                                        ["lat" "lng"]
-                                                                        hyperparameters
-                                                                        hyperparameter-search-fn
-                                                                        hyperparameter-search-space-random
-                                                                        tutils/dummy-ranking-training-set-path
-                                                                        evaluate-options
-                                                                        :example-groups-path
-                                                                        tutils/dummy-ranking-training-set-groups-path)]
+              {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters
+                                                          :xgboost
+                                                          :ranking
+                                                          ["lat" "lng"]
+                                                          hyperparameters
+                                                          hyperparameter-search-fn
+                                                          hyperparameter-search-space-random
+                                                          tutils/dummy-ranking-training-set-path
+                                                          evaluate-options
+                                                          :example-groups-path
+                                                          tutils/dummy-ranking-training-set-groups-path)]
           (verify-call-times-for models/random-search-combos 1)
           (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
-          (is (tutils/approx= 0.9091 (:subsample optimal-params) 1e-4))
-          (is (= {:num-rounds 5 :max_depth 5, :learning_rate 0.99, :objective "rank:ndcg", :subsample 0.9091339560549907, :booster "dart"} optimal-params))))))) ;; TODO add assertion on the ranking metrics evaluated on this model https://github.com/RakutenReady/Team/issues/51929
+          (is (= {:ndcg 1.0
+                  :ndcg-at-3 1.0
+                  :ndcg-at-5 1.0
+                  :precision-at-3 0.5
+                  :precision-at-5 0.5
+                  :personalization-at-3 2.220446049250313e-16
+                  :personalization-at-5 2.220446049250313e-16}
+                 model-evaluations))
+          (is (= {:num-rounds 5
+                  :max_depth 5
+                  :learning_rate 0.99
+                  :objective "rank:ndcg"
+                  :subsample 0.8190881875862341
+                  :booster "dart"}
+                optimal-params)))))))

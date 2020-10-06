@@ -1,4 +1,6 @@
 (ns curbside.ml.utils.stats
+  (:require
+   [clojure.set :as set])
   (:import
    (weka.classifiers.evaluation ConfusionMatrix)))
 
@@ -105,3 +107,91 @@
   [predictions labels]
   {:pre [(= (count predictions) (count labels))]}
   (Math/sqrt (mean (map square-error predictions labels))))
+
+(defn- log2
+  [x]
+  (/ (Math/log x)
+     (Math/log 2)))
+
+(defn discounted-cumulative-gain
+  [xs]
+  (->> xs
+       (map-indexed (fn [i x]
+                      (/ x
+                         (log2 (+ i 2)))))
+       (kahan-sum)))
+
+(defn- top-k-labels
+  "Returns tuples of the top-k predictions and labels, sorted by prediction
+  value."
+  [k predictions labels]
+  (->> (map vector predictions labels)
+       (sort-by first >)
+       (map second)
+       (take k)))
+
+(defn normalized-discounted-cumulative-gain
+  "Computes the normalized discounted cumulative gain. `predictions` are relevance
+  scores estimated by a model, and `labels` are ground truth scores. In its
+  three-arity version, the function accepts `k` as its first argument,
+  indicating to only consider the top-k scores in the ranking. Returns a value
+  between 0 and 1."
+  ([predictions labels]
+   (normalized-discounted-cumulative-gain
+    (count predictions) predictions labels))
+  ([k predictions labels]
+   {:pre [(= (count predictions) (count labels))]}
+   (let [sorted-labels (top-k-labels k predictions labels)
+         ideal-labels (take k (sort > labels))]
+     (/ (discounted-cumulative-gain sorted-labels)
+        (discounted-cumulative-gain ideal-labels)))))
+
+(defn ranking-precision
+  "Returns the fraction of `predictions` in the top-`k` that are relevant, which
+  means having a relevance label greater than 0."
+  [k predictions labels]
+  (let [top-labels (top-k-labels k predictions labels)]
+    (/ (count (filter #(> % 0) top-labels))
+       (count top-labels))))
+
+(defn- top-k-indices
+  "Returns the indices of the top-`k` predictions. For examples, if k is 2 and the
+  predictions are [0.1 0.2 0.0 0.4], This will return [3 1] as the forth and
+  second predictions got the top scores."
+  [k predictions]
+  (->> (map-indexed vector predictions)
+       (sort-by second >)
+       (map first)
+       (take k)))
+
+(defn ranking-cosine-similarity
+  "Computes the cosine similarity of two vector of predictions `predictions-1` and
+  `predictions-2`, only considering the top-`k` predictions. The similarity is
+  computed by counting the number of indices in common in their top-`k`
+  predictions. https://en.wikipedia.org/wiki/Cosine_similarity#Definition"
+  [k predictions-1 predictions-2]
+  (let [indices-1 (top-k-indices k predictions-1)
+        indices-2 (top-k-indices k predictions-2)
+        dot-product (count (set/intersection
+                            (set indices-1)
+                            (set indices-2)))
+        denum (* (Math/sqrt (count indices-1))
+                 (Math/sqrt (count indices-2)))] ;; Should be k most of the time, when k > | predictions |.
+    (/ dot-product denum)))
+
+(defn ranking-personalization
+  "Evaluates the personalization of ranking predictions. Accepts a matrix of
+  predictions, were each row are all the predictions for a same group of
+  example. For instance, each row can represent all the predictions for a same
+  user, and all columns could represent a different offer to recommend.
+
+  Only considers the top-`k` predictions for each
+  group."
+  [k prediction-by-groups]
+  (let [similarities (for [[i p1] (map-indexed vector prediction-by-groups)
+                           [j p2] (map-indexed vector prediction-by-groups)
+                           :while (< j i)]
+                       (ranking-cosine-similarity k p1 p2))]
+    (if (seq similarities)
+      (- 1 (mean similarities))
+      1.0)))
