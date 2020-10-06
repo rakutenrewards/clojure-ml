@@ -1,43 +1,38 @@
 (ns curbside.ml.training-sets.sampling-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.training-sets.sampling :refer [sampling-training-set]]
+   [curbside.ml.training-sets.sampling :refer [sample-training-set]]
    [curbside.ml.utils.io :as io-utils]
    [curbside.ml.utils.tests :as tutils]))
 
-(def empty-csv (io-utils/create-temp-csv-path "label,a,b,c,d\n"))
+(def an-empty-training-set
+  {:feature-maps []
+   :features [:a :b]
+   :labels []})
 
-(defn test-sampling-training-set-sample-size
-  [predictor-type input]
-  (let [output (io-utils/create-temp-csv-path)]
-    (testing "given the default config, when sampling, when it keeps all the data points"
-      (sampling-training-set input output {} predictor-type)
-      (is (= (tutils/count-csv-rows input)
-             (tutils/count-csv-rows output))))
-    (testing "given given a :max-sample-size config, when sampling, the right amount of points is sampled"
-      (sampling-training-set input output {:max-sample-size 1000} predictor-type)
-      (is (= 1000 (tutils/count-csv-rows output))))
-    (testing "given given a :sample-size-percent config, when sampling, the right amount of points is sampled"
-      (sampling-training-set input output {:sample-size-percent 25} predictor-type)
-      (is (= 25 (Math/round (float (* 100 (/ (tutils/count-csv-rows output)
-                                             (tutils/count-csv-rows input))))))))))
+(def a-training-set
+  {:feature-maps (vec (repeat 1000 {:a 0 :b 1}))
+   :features [:a :b]
+   :labels (vec (range 1000))
+   :weights (vec (repeat 1000 1.0))})
 
-(deftest test-sampling-training-set-classification
-  (test-sampling-training-set-sample-size
-   :classification
-   (tutils/resource-name-to-path-str "raw-data/en_route_piecompany_applepie2.csv")))
+(deftest test-sample-training-set
+  (testing "given the default config, when sampling, then it keeps all the data points"
+    (is (= 1000
+           (count (:feature-maps (sample-training-set a-training-set {}))))))
 
-(deftest test-sampling-training-set-regression
-  (test-sampling-training-set-sample-size
-   :regression
-   (tutils/resource-name-to-path-str "raw-data/eta_piecompany_applepie2.csv")))
+  (testing "given given a :max-sample-size config, when sampling, the right amount of points is sampled"
+    (is (= 200
+           (count (:feature-maps (sample-training-set a-training-set {:max-sample-size 200}))))))
 
-(deftest test-sampling-empty-dataset
+  (testing "given given a :sample-size-percent config, when sampling, the right amount of points is sampled"
+    (is (= 250
+           (count (:feature-maps (sample-training-set a-training-set {:sample-size-percent 25}))))))
+
   (testing "given an empty dataset and a :max-sample-size config, when sampling, an empty dataset is produced"
-    (let [output-path (io-utils/create-temp-csv-path)]
-      (sampling-training-set empty-csv output-path {:max-sample-size 1000} :regression)
-      (is (= 0 (tutils/count-csv-rows output-path)))))
+    (is (= an-empty-training-set
+           (sample-training-set an-empty-training-set {:max-sample-size 1000}))))
+
   (testing "given an empty dataset and a :sample-size-percent config, when sampling, an empty dataset is produced"
-    (let [output-path (io-utils/create-temp-csv-path)]
-      (sampling-training-set empty-csv output-path {:sample-size-percent 55} :regression)
-      (is (= 0 (tutils/count-csv-rows output-path))))))
+    (is (= an-empty-training-set
+           (sample-training-set an-empty-training-set {:sample-size-percent 55})))))

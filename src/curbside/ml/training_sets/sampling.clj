@@ -18,28 +18,11 @@
    2. Create copies of training samples
    3. Create augmented copies of training samples
    4. Remove training samples
-   5. Train for sensitivity and specificity
-
-   With the training set sampling step, you will be able to experiment with the
-   methods #2 using the Weka =Resample= class.
-
-   The sampling process should use training sets that can fit in memory. Because
-   we want to reuse the =Resample= class of Weka to help us bootstrapping
-   =curbside-prediction= and because we want to be able to use this sampling
-   process for =SVM= and =Linear SVM= training sets (remember that they use a
-   different training set file format), we have to
-   perform  this training set conversion process:
-
-      :Original Training Set;
-      -> convert to ARFF;
-      :ARFF Training Sets;
-      -> Sampling;
-      :Re-sampled ARFF Training Set;
-      -> convert to CSV;
-      :Re-sampled CSV Training Set;"
+   5. Train for sensitivity and specificity "
   (:require
    [clojure.math.numeric-tower :as math :refer [expt sqrt]]
-   [curbside.ml.training-sets.conversion :as conversion])
+   [curbside.ml.training-sets.training-set :as training-set]
+   [curbside.ml.utils.spec :as spec-utils])
   (:import
    (weka.filters Filter)))
 
@@ -65,38 +48,26 @@
   (let [xsvec (vec xs)]
     (take n (repeatedly #(rand-nth xsvec)))))
 
-(defmulti sample
-  (fn [training-set config predictor-type]
-    predictor-type))
+(defn sample-training-set
+  [training-set config]
+  {:pre [(spec-utils/check ::training-set/training-set training-set)]
+   :post [(spec-utils/check ::training-set/training-set %)]}
 
-(defmethod sample :regression
-  [training-set config _]
-  (let [n (count training-set)
-        sample-size-n (config->sample-size n config)]
-    (if (:without-replacement config)
-      (sample-no-replacement training-set sample-size-n)
-      (sample-with-replacement training-set sample-size-n))))
+  ;; TODO: support :bias-to-uniform-class config setting https://github.com/RakutenReady/Team/issues/52375
+  (when (some? (:bias-to-uniform-class config))
+    (throw (UnsupportedOperationException. "bias to uniform class not yet implemented.")))
 
-(defmethod sample :classification
-  [training-set config _]
-  (let [n (count training-set)
-        sample-size-n (config->sample-size n config)]
-    ;; TODO: support :bias-to-uniform-class config setting
-    (when (> (:bias-to-uniform-class config) 0)
-      (throw (UnsupportedOperationException. "bias to uniform class not yet implemented.")))
-    (if (:without-replacement config)
-      (sample-no-replacement training-set sample-size-n)
-      (sample-with-replacement training-set sample-size-n))))
-
-(defn sampling-training-set
-  "Sample an input ARFF training set. The `label` column needs to be the first
-  of the CSV training set file."
-  [training-set-file sampled-training-set-file sampling-config predictor-type]
-  (let [sampling-config (merge default-sampling-config sampling-config)
-        training-set (conversion/csv-to-maps training-set-file)
-        sampled (sample training-set sampling-config predictor-type)
-        header (conversion/csv-column-keys training-set-file)]
-    (conversion/maps-to-csv sampled-training-set-file header sampled)))
+  (let [config (merge default-sampling-config config)
+        n-values (if (some? (:groups training-set))
+                   (count (:groups training-set))
+                   (count (:feature-maps training-set)))
+        sample-size (config->sample-size n-values config)
+        selected-indices (if (:without-replacement config)
+                           (sample-no-replacement (range n-values) sample-size)
+                           (sample-with-replacement (range n-values) sample-size))]
+    (if (some? (:groups training-set))
+      (training-set/select-groups training-set selected-indices)
+      (training-set/select-examples training-set selected-indices))))
 
 ;; Sample weighting is related to sampling, and sets the relative importance of
 ;; individual rows of the training set based on their numerical attributes.

@@ -146,7 +146,7 @@
   (let [sum (apply + fractions)]
     (< (Math/abs (- 1.0 sum)) 1e-8)))
 
-(defn- select-examples
+(defn select-examples
   "Returns a subset a training-set containing only the specified `indices`."
   [{:keys [weights] :as training-set} indices]
   (-> training-set
@@ -166,7 +166,7 @@
                                         groups)]
     (mapcat example-indices-per-group group-indices)))
 
-(defn- select-groups
+(defn select-groups
   "Returns a subset a training-set containing only the specified `group-indices`,
   which corresponds to indices of groups in the `:groups` vector. For example,
   if the `:groups` vector is `[2 2 2]` and the `group-indices` is `[1 2]`, this
