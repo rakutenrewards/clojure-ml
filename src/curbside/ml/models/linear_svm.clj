@@ -9,8 +9,8 @@
    [clojure.spec.alpha :as s]
    [curbside.ml.data.conversion :as conversion])
   (:import
-   (java.io File)
-   (de.bwaldvogel.liblinear Linear SolverType Problem Parameter Model FeatureNode)))
+   (de.bwaldvogel.liblinear FeatureNode Linear Model Parameter Problem SolverType)
+   (java.io File)))
 
 (s/def ::c (s/double-in :infinite? false :NaN? false))
 (s/def ::p (s/double-in :infinite? false :NaN? false))
@@ -99,9 +99,9 @@
   returns nil otherwise it returns the FeatureNode"
   [index value]
   (when-let [value (if (string? value)
-                       (when-not (empty? value)
-                         (Double/parseDouble value))
-                       value)]
+                     (when-not (empty? value)
+                       (Double/parseDouble value))
+                     value)]
     (new FeatureNode (inc index) value)))
 
 (defn predict

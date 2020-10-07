@@ -1,10 +1,10 @@
 (ns curbside.ml.models-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.models :as models]
    [conjure.core :refer [stubbing verify-call-times-for verify-first-call-args-for]]
-   [curbside.ml.utils.tests :as tutils]
-   [curbside.ml.data.conversion :as conversion]))
+   [curbside.ml.data.conversion :as conversion]
+   [curbside.ml.models :as models]
+   [curbside.ml.utils.tests :as tutils]))
 
 (def grid-search-combos-stub-value [{:subsample 0.5, :max_depth 5}
                                     {:subsample 0.5, :max_depth 6}
@@ -93,7 +93,6 @@
           (is (tutils/approx= 0.0222 (:mean-absolute-error model-evaluations) 1e-4))
           (is (tutils/approx= 0.0222 (:root-mean-square-error model-evaluations) 1e-4)))))))
 
-
 (deftest test-optimize-ranking
   (testing "given a dummy ranking dataset, we can train a ranking model"
     (with-redefs [shuffle identity]
@@ -128,4 +127,4 @@
                   :objective "rank:ndcg"
                   :subsample 0.8190881875862341
                   :booster "dart"}
-                optimal-params)))))))
+                 optimal-params)))))))

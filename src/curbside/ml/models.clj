@@ -36,16 +36,16 @@
    [clojure.math.combinatorics :as combinatorics]
    [clojure.spec.alpha :as s]
    [com.climate.claypoole :as cp]
+   [curbside.ml.data.conversion :as conversion]
+   [curbside.ml.data.dataset :as dataset]
+   [curbside.ml.data.scaling :as scaling]
    [curbside.ml.metrics :as metrics]
-   [curbside.ml.models.xgboost :as xgboost]
    [curbside.ml.models.decision-trees :as decision-trees]
    [curbside.ml.models.linear-svm :as linear-svm]
    [curbside.ml.models.svm :as svm]
+   [curbside.ml.models.xgboost :as xgboost]
    [curbside.ml.utils.parsing :as parsing]
-   [curbside.ml.utils.spec :as spec]
-   [curbside.ml.data.scaling :as scaling]
-   [curbside.ml.data.dataset :as dataset]
-   [curbside.ml.data.conversion :as conversion])
+   [curbside.ml.utils.spec :as spec])
   (:import
    (java.io File)
    (java.util ArrayList)
@@ -235,7 +235,7 @@
   (let [{:keys [dataset-path weights-path groups-path]} (dataset/save-temp-csv-files dataset)
         model (train algorithm predictor-type dataset-path hyperparameters weights-path groups-path)
         predictions (infer-batch algorithm predictor-type model selected-features hyperparameters (:feature-maps validation-set)
-                                          :scaling-factors scaling-factors :label-scaling-fns label-scaling-fns)]
+                                 :scaling-factors scaling-factors :label-scaling-fns label-scaling-fns)]
     (dispose algorithm model)
     predictions))
 

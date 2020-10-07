@@ -1,16 +1,16 @@
 (ns curbside.ml.models.xgboost-test
   (:require
-   [clojure.core.async :refer [alts!! timeout thread-call]]
+   [clojure.core.async :refer [alts!! thread-call timeout]]
+   [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.models.xgboost :as xgboost]
    [curbside.ml.data.conversion :as conversion]
    [curbside.ml.data.dataset :as dataset]
+   [curbside.ml.models.xgboost :as xgboost]
    [curbside.ml.utils.io :as io-utils]
-   [curbside.ml.utils.tests :as tutils]
-   [clojure.java.io :as io])
+   [curbside.ml.utils.tests :as tutils])
   (:import
-   [java.util Arrays]
-   [ml.dmlc.xgboost4j.java Booster]))
+   (java.util Arrays)
+   (ml.dmlc.xgboost4j.java Booster)))
 
 (deftest test-split-dmatrix
   (let [dm (#'xgboost/->DMatrix (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil) nil)
@@ -30,9 +30,9 @@
   (testing "given a dummy ranking dataset, when training, then the model can be used to predict"
     (let [hyperparameters {:num-rounds 5 :max_depth 5 :learning_rate 0.99 :objective "rank:ndcg"}
           dataset (dataset/load-csv-files
-                        tutils/dummy-ranking-dataset-path
-                        nil
-                        tutils/dummy-ranking-dataset-groups-path)
+                   tutils/dummy-ranking-dataset-path
+                   nil
+                   tutils/dummy-ranking-dataset-groups-path)
           model (xgboost/train
                  dataset
                  tutils/dummy-ranking-dataset-encoding
@@ -47,8 +47,8 @@
                            :weight-mean 0.5 :weight-label-name "label"
                            :weight-stddev 1.0}
           dataset (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path
-                                                    tutils/dummy-example-weights-path
-                                                    nil)
+                                          tutils/dummy-example-weights-path
+                                          nil)
           model (xgboost/train
                  dataset
                  nil

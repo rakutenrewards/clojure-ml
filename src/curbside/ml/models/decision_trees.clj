@@ -58,7 +58,6 @@
    | =do-not-check-capabilities=               | If set, classifier capabilities are not checked before classifier is built (use with caution).      | =boolean=  | =[true, false]= |         |
    | =num-decimal-places=                      | The number of decimal places for the output of numbers in the model.                                | =integer=  | =[1, ...]=      |       2 |
    | =batch-size=                              | The desired batch size for batch prediction.                                                        | =integer=  | =[1, ...]=      |     100 |"
-
   (:refer-clojure :exclude [load])
   (:require
    [clojure.java.io :as io]
@@ -67,15 +66,11 @@
    [curbside.ml.data.conversion :as conversion]
    [curbside.ml.utils.weka :as weka])
   (:import
+   (guru.nidi.graphviz.engine Format Graphviz)
    (guru.nidi.graphviz.parse Parser)
-   (guru.nidi.graphviz.engine Graphviz Format)
-   (java.io BufferedInputStream
-            FileInputStream
-            FileOutputStream
-            ObjectInputStream
-            ObjectOutputStream)
+   (java.io BufferedInputStream FileInputStream FileOutputStream ObjectInputStream ObjectOutputStream)
    (weka.classifiers AbstractClassifier)
-   (weka.classifiers.trees RandomForest M5P J48)
+   (weka.classifiers.trees J48 M5P RandomForest)
    (weka.core Utils)))
 
 (s/def ::u boolean?)

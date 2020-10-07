@@ -20,11 +20,11 @@
     and the two last are in the last group. This is the group semantic used by
     XGBoost."
   (:require
+   [clojure.java.io :as io]
    [clojure.spec.alpha :as s]
-   [curbside.ml.utils.io :as io-utils]
-   [curbside.ml.utils.spec :as spec-utils]
    [curbside.ml.data.conversion :as conversion]
-   [clojure.java.io :as io]))
+   [curbside.ml.utils.io :as io-utils]
+   [curbside.ml.utils.spec :as spec-utils]))
 
 ;; =============================================================================
 ;; Spec

@@ -1,12 +1,14 @@
 (ns curbside.ml.data.conversion
-  (:require [clojure.java.io :as io]
-            [clojure.data.csv :as csv]
-            [clojure.string :as string]
-            [curbside.ml.data.encoding :as encoding]
-            [curbside.ml.utils.parsing :as parsing])
-  (:import (weka.core.converters CSVSaver)
-           (weka.filters Filter)
-           (weka.filters.unsupervised.attribute NumericToNominal)))
+  (:require
+   [clojure.data.csv :as csv]
+   [clojure.java.io :as io]
+   [clojure.string :as string]
+   [curbside.ml.data.encoding :as encoding]
+   [curbside.ml.utils.parsing :as parsing])
+  (:import
+   (weka.core.converters CSVSaver)
+   (weka.filters Filter)
+   (weka.filters.unsupervised.attribute NumericToNominal)))
 
 (defn csv-to-libsvm
   "convert a csv training set file into a libsvm one. the first column is the
@@ -75,8 +77,8 @@
     ;; This can't be done with the `CSVSaver` API since
     ;; it doesn't accept empty values...
     (spit sampled-dataset-file (-> (slurp sampled-dataset-file)
-                                        (string/replace ",?," ",,")
-                                        (string/replace ",?" ",")))))
+                                   (string/replace ",?," ",,")
+                                   (string/replace ",?" ",")))))
 
 (defn csv-column-keys
   "Returns the keys in the CSV's header. The keys are put in a vector in the same
@@ -152,6 +154,6 @@
   ([feature-names dataset-encoding feature-map]
    (if (some? dataset-encoding)
      (->> feature-map
-        (encoding/encode-feature-map dataset-encoding)
-        (feature-map-to-vector feature-names))
+          (encoding/encode-feature-map dataset-encoding)
+          (feature-map-to-vector feature-names))
      (feature-map-to-vector feature-names feature-map))))

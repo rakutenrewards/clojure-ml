@@ -31,7 +31,6 @@
 
 (s/def ::dataset-encoding (s/keys :req-un [::features]))
 
-
 (defn- identity-matrix
   "Returns an identity matrix of size `n`."
   [n]

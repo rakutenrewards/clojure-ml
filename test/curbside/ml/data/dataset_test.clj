@@ -33,7 +33,6 @@
   (is (false? (#'ts/fractions-sum-to-one? [0.99])))
   (is (false? (#'ts/fractions-sum-to-one? []))))
 
-
 (deftest select-examples
   (is (= {:features [:a :b]
           :feature-maps [{:a 0 :b 0} {:a 4 :b 4}]
@@ -78,7 +77,7 @@
          (#'ts/indices-of-splits 9 false [0.5 0.5])))
   (is (= [[8 7 6] [5 4 3] [2 1 0]]
          (with-redefs [shuffle reverse]
-           (#'ts/indices-of-splits 9 true [(/ 1 3 ) (/ 1 3) (/ 1 3)])))))
+           (#'ts/indices-of-splits 9 true [(/ 1 3) (/ 1 3) (/ 1 3)])))))
 
 (deftest split
   (testing "training sets without a group"

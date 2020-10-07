@@ -10,9 +10,9 @@
 (deftest test-min-max-scaling
   (testing "given a number, when scaling and unscaling it, then it still have the same value"
     (is (as-> 2 value
-            (scaling/apply-scaling :min-max value {:min 0 :max 10})
-            (scaling/apply-unscaling :min-max value {:min 0 :max 10})
-            (== 2 value))))
+          (scaling/apply-scaling :min-max value {:min 0 :max 10})
+          (scaling/apply-unscaling :min-max value {:min 0 :max 10})
+          (== 2 value))))
 
   (testing "given a number, when applying scaling, then the number is scaled"
     (is (== 0.2 (scaling/apply-scaling :min-max 2 {:min 0 :max 10}))))
@@ -57,7 +57,7 @@
 
 (def a-dataset (repeat 3 a-feature-map))
 (def dataset-scaling-factors {:features [min-max-features-factors]
-                                 :labels [{}]})
+                              :labels [{}]})
 
 (defn is-dataset-example-scaled?
   [{:keys [x y z unknown label]}]
@@ -70,9 +70,9 @@
 (deftest test-scale-dataset
   (testing "given a training set, when scaling, all features and labels are scaled"
     (let [scaled-set (scaling/scale-dataset [:min-max]
-                                                 [:log10]
-                                                 dataset-scaling-factors
-                                                 a-dataset)]
+                                            [:log10]
+                                            dataset-scaling-factors
+                                            a-dataset)]
       (doseq [example scaled-set]
         (is-dataset-example-scaled? example)))))
 

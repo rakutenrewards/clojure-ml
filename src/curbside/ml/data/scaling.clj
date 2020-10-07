@@ -11,8 +11,7 @@
 
    The key distinction between the two types of scaling is that label scaling
    *also needs to be applied on predicted values at inference time*. The scaling
-   configuration spec is detailed [here](file:~/curbside-prediction/org/src/curbside/prediction/pipeline.org::*Scale%20Training%20Sets).
-"
+   configuration spec is detailed [here](file:~/curbside-prediction/org/src/curbside/prediction/pipeline.org::*Scale%20Training%20Sets)."
   (:require
    [clojure.spec.alpha :as s]
    [curbside.ml.data.conversion :as conversion]

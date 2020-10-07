@@ -5,17 +5,17 @@
    about it at [the XGBoost website](https://xgboost.readthedocs.io/en/latest/)."
   (:refer-clojure :exclude [load])
   (:require
+   [clojure.data.csv :as csv]
    [clojure.java.io :as io]
-   [clojure.tools.logging :as log]
    [clojure.set :as set]
    [clojure.spec.alpha :as s]
    [clojure.string :as string]
+   [clojure.tools.logging :as log]
    [clojure.walk :as walk]
    [curbside.ml.data.conversion :as conversion]
    [curbside.ml.data.encoding :as encoding]
    [curbside.ml.data.sampling :as sampling]
-   [curbside.ml.utils.parsing :as parsing]
-   [clojure.data.csv :as csv])
+   [curbside.ml.utils.parsing :as parsing])
   (:import
    (ml.dmlc.xgboost4j LabeledPoint)
    (ml.dmlc.xgboost4j.java Booster DMatrix DMatrix$SparseType XGBoost XGBoostError)))

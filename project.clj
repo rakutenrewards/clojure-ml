@@ -44,9 +44,10 @@
                    {:dependencies [[org.slf4j/slf4j-simple "1.7.30"]
                                    [criterium "0.4.6"]]}]}
 
-  :plugins [[com.gfredericks/how-to-ns "0.1.6"]
+  :plugins [[com.gfredericks/lein-how-to-ns "0.2.7"]
             [lein-ancient "0.6.15"]
-            [jonase/eastwood "0.3.5"]]
+            [jonase/eastwood "0.3.11"]
+            [lein-cljfmt "0.6.8"]]
 
   :how-to-ns {:require-docstring? false
               :sort-clauses? true
@@ -54,6 +55,14 @@
               :allow-extra-clauses? false
               :align-clauses? false
               :import-square-brackets? false}
+
+  :cljfmt {:indents {instrumenting [[:block 1]]
+                     mocking [[:block 1]]
+                     stubbing [[:block 1]]
+                     mocking-private [[:block 1]]
+                     stubbing-private [[:block 1]]
+                     timed [[:block 2]]
+                     for-all [[:block 1]]}}
 
   :deploy-repositories [["releases" {:url "https://maven.pkg.github.com/RakutenReady/curbside-clojure-ml"
                                     :username :env/github_actor
@@ -75,5 +84,8 @@
                            :unused-private-vars
                            :unused-ret-vals
                            :unused-ret-vals-in-try]}
+
+  :aliases {"fix" ["do" ["cljfmt" "fix"] ["how-to-ns" "fix"]]
+            "check" ["do" ["cljfmt" "check"] ["how-to-ns" "check"]]}
 
   :jvm-opts ["-XX:-OmitStackTraceInFastThrow"])

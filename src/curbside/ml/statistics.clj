@@ -1,5 +1,6 @@
 (ns curbside.ml.statistics
-  (:import (org.apache.commons.math3.stat.descriptive DescriptiveStatistics)))
+  (:import
+   (org.apache.commons.math3.stat.descriptive DescriptiveStatistics)))
 
 (defn descriptive-stats
   [xs]

@@ -2,9 +2,9 @@
   (:require
    [clojure.data.csv :as csv]
    [clojure.edn :as edn]
+   [clojure.java.io :as io]
    [clojure.walk :as walk]
-   [conjure.core :as conjure]
-   [clojure.java.io :as io]))
+   [conjure.core :as conjure]))
 
 (defn count-csv-rows
   [path]

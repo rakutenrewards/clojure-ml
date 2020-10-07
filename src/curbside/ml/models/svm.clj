@@ -11,7 +11,7 @@
    [curbside.ml.utils.parsing :as parsing])
   (:import
    (clojure.lang Reflector)
-   (libsvm svm_problem svm_node svm_parameter svm)))
+   (libsvm svm svm_node svm_parameter svm_problem)))
 
 (s/def ::kernel-type #{:linear
                        :poly
@@ -85,11 +85,11 @@
   that define the problem, then the problem will be created from that sequence."
   [dataset-path]
   (let [dataset (if (and (string? dataset-path)
-                              (.exists (io/as-file dataset-path)))
-                       (rest
-                        (with-open [in-file (io/reader dataset-path)]
-                          (doall (csv/read-csv in-file))))
-                       (throw (Exception. (str "File doesn't exist: " dataset-path))))
+                         (.exists (io/as-file dataset-path)))
+                  (rest
+                   (with-open [in-file (io/reader dataset-path)]
+                     (doall (csv/read-csv in-file))))
+                  (throw (Exception. (str "File doesn't exist: " dataset-path))))
         problem (new svm_problem)]
     (set! (.l problem) (count dataset))
     (set! (.y problem) (double-array (->> dataset

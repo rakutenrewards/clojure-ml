@@ -1,8 +1,8 @@
 (ns curbside.ml.utils.date-time-test
   (:require
+   [clj-time.types :as time-types]
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.utils.date-time :as date-time]
-   [clj-time.types :as time-types]))
+   [curbside.ml.utils.date-time :as date-time]))
 
 (deftest parse
   (testing "given string dates in ISO 8601 formats, when parsing them, then a date-time object is returned."
