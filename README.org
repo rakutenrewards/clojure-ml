@@ -25,9 +25,9 @@ The =model= namespace offers the following interface, based on the provided algo
 - optimize-hyperparameters
 - infer
 
-** Releasing to Artifactory
+** Releasing to Github
 
-We use [[lein-release][https://github.com/relaynetwork/lein-release]] to release artifacts to Artifactory. To use:
+We use [[lein-release][https://github.com/relaynetwork/lein-release]] to release artifacts to Github. To use:
 
 1. Export =GITHUB_ACTOR= and =GITHUB_TOKEN=. You can generate a token from your own account settings with the =write:packages= permission.
 2. Make sure you are on the master branch, and that its remote branch is set to the primary source repository (https://github.com/Curbside/curbside-clojure-ml).
