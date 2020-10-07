@@ -79,24 +79,24 @@
                               :weight (double-array 0) ; for c-svc
                               :weight-label (int-array 0)}) ; for c-svc
 
-(defn- training-set-path->problem
+(defn- dataset-path->problem
   "Define a problem space by reading a CSV training set. If training is a CSV
   file then the problem will be read from that file. If training is a sequence
   that define the problem, then the problem will be created from that sequence."
-  [training-set-path]
-  (let [training-set (if (and (string? training-set-path)
-                              (.exists (io/as-file training-set-path)))
+  [dataset-path]
+  (let [dataset (if (and (string? dataset-path)
+                              (.exists (io/as-file dataset-path)))
                        (rest
-                        (with-open [in-file (io/reader training-set-path)]
+                        (with-open [in-file (io/reader dataset-path)]
                           (doall (csv/read-csv in-file))))
-                       (throw (Exception. (str "File doesn't exist: " training-set-path))))
+                       (throw (Exception. (str "File doesn't exist: " dataset-path))))
         problem (new svm_problem)]
-    (set! (.l problem) (count training-set))
-    (set! (.y problem) (double-array (->> training-set
+    (set! (.l problem) (count dataset))
+    (set! (.y problem) (double-array (->> dataset
                                           (mapv (fn [[label & _features]]
                                                   (parsing/parse-double label))))))
     (set! (.x problem) (into-array
-                        (->> training-set
+                        (->> dataset
                              (map (fn [[_label & features]]
                                     (into-array
                                      (sort-by #(.index %)
@@ -122,8 +122,8 @@
 
 (defn train
   "Train a Linear SVM model for a given problem with specified parameters"
-  [training-set-path hyperparameters]
-  (let [problem-obj (training-set-path->problem training-set-path)
+  [dataset-path hyperparameters]
+  (let [problem-obj (dataset-path->problem dataset-path)
         params-obj (format-hyperparameters hyperparameters)]
     (when-let [error (svm/svm_check_parameter problem-obj params-obj)]
       (throw (Exception. error)))

@@ -1,9 +1,9 @@
-(ns curbside.ml.training-sets.training-set-test
+(ns curbside.ml.data.dataset-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.training-sets.training-set :as ts]))
+   [curbside.ml.data.dataset :as ts]))
 
-(def some-training-set
+(def some-dataset
   {:features [:a :b]
    :feature-maps [{:a 0 :b 0}
                   {:a 1 :b 1}
@@ -13,19 +13,19 @@
                   {:a 5 :b 5}]
    :labels [0 1 2 3 4 5]})
 
-(def some-training-set-with-weights
-  (assoc some-training-set :weights [0.0 0.1 0.2 0.3 0.4 0.5]))
+(def some-dataset-with-weights
+  (assoc some-dataset :weights [0.0 0.1 0.2 0.3 0.4 0.5]))
 
-(def some-training-set-with-weights-and-groups
-  (assoc some-training-set
+(def some-dataset-with-weights-and-groups
+  (assoc some-dataset
          :weights [0.2 0.3 0.1]
          :groups [2 3 1]))
 
-(deftest save-and-load-training-set
-  (is (= some-training-set-with-weights-and-groups
-         (let [{:keys [training-set-path weights-path groups-path]}
-               (ts/save-temp-csv-files some-training-set-with-weights-and-groups)]
-           (ts/load-csv-files training-set-path weights-path groups-path)))))
+(deftest save-and-load-dataset
+  (is (= some-dataset-with-weights-and-groups
+         (let [{:keys [dataset-path weights-path groups-path]}
+               (ts/save-temp-csv-files some-dataset-with-weights-and-groups)]
+           (ts/load-csv-files dataset-path weights-path groups-path)))))
 
 (deftest fractions-sum-to-one?
   (is (true? (#'ts/fractions-sum-to-one? [0.6 0.4])))
@@ -38,16 +38,16 @@
   (is (= {:features [:a :b]
           :feature-maps [{:a 0 :b 0} {:a 4 :b 4}]
           :labels [0 4]}
-         (#'ts/select-examples some-training-set [0 4])))
+         (#'ts/select-examples some-dataset [0 4])))
   (is (= {:features [:a :b]
           :feature-maps [{:a 5 :b 5} {:a 1 :b 1} {:a 1 :b 1}]
           :labels [5 1 1]}
-         (#'ts/select-examples some-training-set [5 1 1])))
+         (#'ts/select-examples some-dataset [5 1 1])))
   (is (= {:features [:a :b]
           :feature-maps [{:a 4 :b 4}]
           :weights [0.4]
           :labels [4]}
-         (#'ts/select-examples some-training-set-with-weights [4]))))
+         (#'ts/select-examples some-dataset-with-weights [4]))))
 
 (deftest group->example-indices
   (is (= [0 1]
@@ -63,13 +63,13 @@
           :groups [3]
           :weights [0.3]
           :labels [2 3 4]}
-         (#'ts/select-groups some-training-set-with-weights-and-groups [1])))
+         (#'ts/select-groups some-dataset-with-weights-and-groups [1])))
   (is (= {:features [:a :b]
           :feature-maps [{:a 5 :b 5} {:a 0 :b 0} {:a 1 :b 1}]
           :groups [1 2]
           :weights [0.1 0.2]
           :labels [5 0 1]}
-         (#'ts/select-groups some-training-set-with-weights-and-groups [2 0]))))
+         (#'ts/select-groups some-dataset-with-weights-and-groups [2 0]))))
 
 (deftest indices-of-splits
   (is (= [[0 1 2 3 4] [5 6 7 8 9]]
@@ -94,7 +94,7 @@
                             {:a 5 :b 5}]
              :labels [3 4 5]
              :weights [0.3 0.4 0.5]}]
-           (ts/split some-training-set-with-weights false [0.5 0.5])))
+           (ts/split some-dataset-with-weights false [0.5 0.5])))
     (is (= [{:features [:a :b]
              :feature-maps [{:a 0 :b 0}
                             {:a 1 :b 1}
@@ -105,7 +105,7 @@
              :feature-maps [{:a 4 :b 4}
                             {:a 5 :b 5}]
              :labels [4 5]}]
-           (ts/split some-training-set false [0.6 0.4]))))
+           (ts/split some-dataset false [0.6 0.4]))))
   (testing "training sets with a group"
     (is (= [{:features [:a :b]
              :feature-maps
@@ -123,7 +123,7 @@
              :labels [5]
              :weights [0.1]
              :groups [1]}]
-           (ts/split some-training-set-with-weights-and-groups false [0.5 0.5])))))
+           (ts/split some-dataset-with-weights-and-groups false [0.5 0.5])))))
 
 (deftest k-fold-split
   (is (= [[;; train-split
@@ -162,4 +162,4 @@
             :feature-maps [{:a 4 :b 4}
                            {:a 5 :b 5}]
             :labels [4 5]}]]
-         (ts/k-fold-split some-training-set false 3))))
+         (ts/k-fold-split some-dataset false 3))))

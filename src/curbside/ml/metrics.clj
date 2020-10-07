@@ -2,8 +2,8 @@
   (:refer-clojure :exclude [comparator])
   (:require
    [clojure.spec.alpha :as s]
-   [curbside.ml.training-sets.conversion :as conversion]
-   [curbside.ml.training-sets.training-set :as training-set]
+   [curbside.ml.data.conversion :as conversion]
+   [curbside.ml.data.dataset :as dataset]
    [curbside.ml.utils.spec :as spec-utils]
    [curbside.ml.utils.stats :as stats]
    [curbside.ml.utils.parsing :as parsing]
@@ -66,7 +66,7 @@
             (lazy-seq (partition-by-groups (rest groups) others))))))
 
 (defn- model-metrics-ranking
-  [predictions {:keys [labels groups] :as _training-set}]
+  [predictions {:keys [labels groups] :as _dataset}]
   (let [prediction-groups (partition-by-groups groups predictions)
         label-groups (partition-by-groups groups labels)]
     {:ndcg (stats/mean (map stats/normalized-discounted-cumulative-gain
@@ -84,13 +84,13 @@
 
 (defn model-metrics
   "Calculate all the metrics given a vector of `predictions` made from a
-  `training-set`. Return a map of the computed metrics."
-  [predictor-type predictions training-set]
-  {:pre [(spec-utils/check ::training-set/training-set training-set)]}
+  `dataset`. Return a map of the computed metrics."
+  [predictor-type predictions dataset]
+  {:pre [(spec-utils/check ::dataset/dataset dataset)]}
   (case predictor-type
-    :classification (model-metrics-classification predictions (:labels training-set))
-    :ranking (model-metrics-ranking predictions training-set)
-    :regression (model-metrics-regression predictions (:labels training-set))))
+    :classification (model-metrics-classification predictions (:labels dataset))
+    :ranking (model-metrics-ranking predictions dataset)
+    :regression (model-metrics-regression predictions (:labels dataset))))
 
 (defn comparator
   "Returns the comparator to use to compare a metrics' results to optimize its
@@ -165,14 +165,14 @@
            (apply merge)))))
 
 (defn- get-training-instances
-  [training-set-csv-path predictor-type]
+  [dataset-csv-path predictor-type]
   (weka/problem
-   (conversion/csv-to-arff training-set-csv-path predictor-type)))
+   (conversion/csv-to-arff dataset-csv-path predictor-type)))
 
 (defn feature-metrics
-  [training-set-csv-path predictor-type evaluators]
+  [dataset-csv-path predictor-type evaluators]
   {:pre [(spec-utils/check ::evaluators evaluators)]}
-  (let [instances (get-training-instances training-set-csv-path predictor-type)]
+  (let [instances (get-training-instances dataset-csv-path predictor-type)]
     (reduce (fn [metrics evaluator]
               (assoc metrics evaluator (evaluate-feature evaluator instances)))
             {}

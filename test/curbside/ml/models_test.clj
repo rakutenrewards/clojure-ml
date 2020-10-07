@@ -4,7 +4,7 @@
    [curbside.ml.models :as models]
    [conjure.core :refer [stubbing verify-call-times-for verify-first-call-args-for]]
    [curbside.ml.utils.tests :as tutils]
-   [curbside.ml.training-sets.conversion :as conversion]))
+   [curbside.ml.data.conversion :as conversion]))
 
 (def grid-search-combos-stub-value [{:subsample 0.5, :max_depth 5}
                                     {:subsample 0.5, :max_depth 6}
@@ -41,7 +41,7 @@
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-grid
-                                                                                        tutils/dummy-regression-single-label-training-set-path
+                                                                                        tutils/dummy-regression-single-label-dataset-path
                                                                                         evaluate-options)]
         (verify-call-times-for models/grid-search-combos 1)
         (verify-first-call-args-for models/grid-search-combos hyperparameter-search-space-grid)
@@ -62,7 +62,7 @@
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-random
-                                                                                        tutils/dummy-regression-single-label-training-set-path
+                                                                                        tutils/dummy-regression-single-label-dataset-path
                                                                                         evaluate-options)]
         (verify-call-times-for models/random-search-combos 1)
         (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
@@ -84,7 +84,7 @@
                                                                                           hyperparameters
                                                                                           hyperparameter-search-fn
                                                                                           hyperparameter-search-space-random
-                                                                                          tutils/dummy-regression-single-label-training-set-path
+                                                                                          tutils/dummy-regression-single-label-dataset-path
                                                                                           evaluate-options)]
           (verify-call-times-for models/random-search-combos 1)
           (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
@@ -108,10 +108,10 @@
                                                           hyperparameters
                                                           hyperparameter-search-fn
                                                           hyperparameter-search-space-random
-                                                          tutils/dummy-ranking-training-set-path
+                                                          tutils/dummy-ranking-dataset-path
                                                           evaluate-options
                                                           :example-groups-path
-                                                          tutils/dummy-ranking-training-set-groups-path)]
+                                                          tutils/dummy-ranking-dataset-groups-path)]
           (verify-call-times-for models/random-search-combos 1)
           (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
           (is (= {:ndcg 1.0

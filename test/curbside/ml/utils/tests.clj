@@ -15,19 +15,19 @@
   [r]
   (.getPath (io/resource r)))
 
-(def dummy-regression-single-label-training-set-path
-  (io/resource "training-sets/dummy-regression-single-label.csv"))
+(def dummy-regression-single-label-dataset-path
+  (io/resource "datasets/dummy-regression-single-label.csv"))
 
-(def dummy-example-weights-path (io/resource "training-sets/dummy-weights.csv"))
+(def dummy-example-weights-path (io/resource "datasets/dummy-weights.csv"))
 
-(def dummy-ranking-training-set-path
-  (io/resource "training-sets/dummy-ranking.csv"))
+(def dummy-ranking-dataset-path
+  (io/resource "datasets/dummy-ranking.csv"))
 
-(def dummy-ranking-training-set-groups-path
-  (io/resource "training-sets/dummy-ranking.groups.csv"))
+(def dummy-ranking-dataset-groups-path
+  (io/resource "datasets/dummy-ranking.groups.csv"))
 
-(def dummy-ranking-training-set-encoding
-  (edn/read-string (slurp (io/resource "training-sets/dummy-ranking.encoding.edn"))))
+(def dummy-ranking-dataset-encoding
+  (edn/read-string (slurp (io/resource "datasets/dummy-ranking.encoding.edn"))))
 
 (defn approx=
   [x y tolerance]

@@ -43,9 +43,9 @@
    [curbside.ml.models.svm :as svm]
    [curbside.ml.utils.parsing :as parsing]
    [curbside.ml.utils.spec :as spec]
-   [curbside.ml.training-sets.scaling :as scaling]
-   [curbside.ml.training-sets.training-set :as training-set]
-   [curbside.ml.training-sets.conversion :as conversion])
+   [curbside.ml.data.scaling :as scaling]
+   [curbside.ml.data.dataset :as dataset]
+   [curbside.ml.data.conversion :as conversion])
   (:import
    (java.io File)
    (java.util ArrayList)
@@ -64,7 +64,7 @@
     algorithm))
 
 (defmulti train
-  (fn [algorithm predictor-type training-set-path hyperparameters & args]
+  (fn [algorithm predictor-type dataset-path hyperparameters & args]
     algorithm))
 
 (defmulti predict
@@ -89,9 +89,9 @@
   (xgboost/load filepath))
 
 (defmethod train :xgboost
-  [_ predictor-type training-set-path params & [weights-path groups-path]]
-  (xgboost/train (training-set/load-csv-files training-set-path weights-path groups-path)
-                 nil ;; TODO support passing a the training-set encoding. This may result in breaking changes in the API
+  [_ predictor-type dataset-path params & [weights-path groups-path]]
+  (xgboost/train (dataset/load-csv-files dataset-path weights-path groups-path)
+                 nil ;; TODO support passing a the dataset encoding. This may result in breaking changes in the API
                  params))
 
 (defmethod predict :xgboost
@@ -127,16 +127,16 @@
   (decision-trees/load file))
 
 (defmethod train :c4.5
-  [algorithm predictor-type training-set hyperparameters & _]
-  (decision-trees/train algorithm predictor-type training-set hyperparameters))
+  [algorithm predictor-type dataset hyperparameters & _]
+  (decision-trees/train algorithm predictor-type dataset hyperparameters))
 
 (defmethod train :m5p
-  [algorithm predictor-type training-set hyperparameters & _]
-  (decision-trees/train algorithm predictor-type training-set hyperparameters))
+  [algorithm predictor-type dataset hyperparameters & _]
+  (decision-trees/train algorithm predictor-type dataset hyperparameters))
 
 (defmethod train :random-forest
-  [algorithm predictor-type training-set hyperparameters & _]
-  (decision-trees/train algorithm predictor-type training-set hyperparameters))
+  [algorithm predictor-type dataset hyperparameters & _]
+  (decision-trees/train algorithm predictor-type dataset hyperparameters))
 
 (defmethod predict :c4.5
   [_ predictor-type model selected-features _hyperparameters feature-vector]
@@ -159,8 +159,8 @@
   (svm/load filepath))
 
 (defmethod train :svm
-  [_ _predictor-type training-set-path hyperparameters & _]
-  (svm/train training-set-path hyperparameters))
+  [_ _predictor-type dataset-path hyperparameters & _]
+  (svm/train dataset-path hyperparameters))
 
 (defmethod predict :svm
   [_ _predictor-type model seleted-features hyperparameters feature-vector]
@@ -175,8 +175,8 @@
   (linear-svm/load filepath))
 
 (defmethod train :lsvm
-  [_ _predictor-type training-set-csv-path hyperparameters & _]
-  (linear-svm/train training-set-csv-path hyperparameters))
+  [_ _predictor-type dataset-csv-path hyperparameters & _]
+  (linear-svm/train dataset-csv-path hyperparameters))
 
 (defmethod predict :lsvm
   [_ _predictor-type model _selected-features _hyperparameters feature-vector]
@@ -231,9 +231,9 @@
 
 (defn- train-and-infer
   [algorithm predictor-type selected-features hyperparameters
-   scaling-factors label-scaling-fns training-set validation-set]
-  (let [{:keys [training-set-path weights-path groups-path]} (training-set/save-temp-csv-files training-set)
-        model (train algorithm predictor-type training-set-path hyperparameters weights-path groups-path)
+   scaling-factors label-scaling-fns dataset validation-set]
+  (let [{:keys [dataset-path weights-path groups-path]} (dataset/save-temp-csv-files dataset)
+        model (train algorithm predictor-type dataset-path hyperparameters weights-path groups-path)
         predictions (infer-batch algorithm predictor-type model selected-features hyperparameters (:feature-maps validation-set)
                                           :scaling-factors scaling-factors :label-scaling-fns label-scaling-fns)]
     (dispose algorithm model)
@@ -242,31 +242,31 @@
 (defn- create-train-validate-splits
   "Given a dataset and the type of split to be used, produce a vector of train and
   validation sets to be evaluated."
-  [evaluate-options training-set]
+  [evaluate-options dataset]
   (case (:type evaluate-options)
-    :train-test-split [(training-set/train-test-split training-set true (:train-split-percentage evaluate-options))]
-    :k-fold (training-set/k-fold-split training-set true (:folds evaluate-options))))
+    :train-test-split [(dataset/train-test-split dataset true (:train-split-percentage evaluate-options))]
+    :k-fold (dataset/k-fold-split dataset true (:folds evaluate-options))))
 
 (defn evaluate
   "Either cross validation or validation using a held out test set"
-  [algorithm predictor-type selected-features hyperparameters training-set-path evaluate-options
+  [algorithm predictor-type selected-features hyperparameters dataset-path evaluate-options
    & {:keys [scaling-factors label-scaling-fns example-weights-path example-groups-path]}]
-  (let [training-set (training-set/load-csv-files training-set-path example-weights-path example-groups-path)
-        splits-to-evaluate (create-train-validate-splits evaluate-options training-set)
+  (let [dataset (dataset/load-csv-files dataset-path example-weights-path example-groups-path)
+        splits-to-evaluate (create-train-validate-splits evaluate-options dataset)
         validation-sets (map second splits-to-evaluate)
         predictions (->> splits-to-evaluate
-                         (pmap (fn [[training-set validation-set]]
+                         (pmap (fn [[dataset validation-set]]
                                  (train-and-infer algorithm
                                                   predictor-type
                                                   selected-features
                                                   hyperparameters
                                                   scaling-factors
                                                   label-scaling-fns
-                                                  training-set
+                                                  dataset
                                                   validation-set)))
                          (apply concat))]
     (metrics/model-metrics predictor-type predictions
-                           (apply training-set/concat-training-sets validation-sets))))
+                           (apply dataset/concat-datasets validation-sets))))
 
 (def supported-evaluate-types #{:train-test-split :k-fold})
 
@@ -411,7 +411,7 @@
 (defn optimize-hyperparameters
   "This function is responsible for training a model with the best
   hyperparameters found by the provided `hyperparameter-search-fn`."
-  [algorithm predictor-type selected-features hardcoded-hyperparameters hyperparameter-search-fn hyperparameter-search-space training-set-path evaluate-options
+  [algorithm predictor-type selected-features hardcoded-hyperparameters hyperparameter-search-fn hyperparameter-search-space dataset-path evaluate-options
    & {:keys [selection-metric threads-pool scaling-factors feature-scaling-fns
              label-scaling-fns example-weights-path example-groups-path]}]
   {:pre [(spec/check ::algorithm algorithm)
@@ -432,7 +432,7 @@
                                        predictor-type
                                        selected-features
                                        hyperparameters
-                                       training-set-path
+                                       dataset-path
                                        evaluate-options
                                        :scaling-factors scaling-factors
                                        :feature-scaling-fns feature-scaling-fns

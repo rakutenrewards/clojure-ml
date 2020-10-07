@@ -1,8 +1,8 @@
-(ns curbside.ml.training-sets.conversion
+(ns curbside.ml.data.conversion
   (:require [clojure.java.io :as io]
             [clojure.data.csv :as csv]
             [clojure.string :as string]
-            [curbside.ml.training-sets.encoding :as encoding]
+            [curbside.ml.data.encoding :as encoding]
             [curbside.ml.utils.parsing :as parsing])
   (:import (weka.core.converters CSVSaver)
            (weka.filters Filter)
@@ -64,17 +64,17 @@
      arff)))
 
 (defn arff-to-csv
-  [training-set sampled-training-set-file]
-  (let [sampled-training-set-arff-file (string/replace sampled-training-set-file ".csv" ".arff")
+  [dataset sampled-dataset-file]
+  (let [sampled-dataset-arff-file (string/replace sampled-dataset-file ".csv" ".arff")
         csv-saver (CSVSaver.)]
-    (with-open [writer (io/writer sampled-training-set-arff-file)]
-      (.write writer (.toString training-set)))
-    (CSVSaver/runFileSaver csv-saver (into-array String ["-i" sampled-training-set-arff-file
-                                                         "-o" sampled-training-set-file]))
+    (with-open [writer (io/writer sampled-dataset-arff-file)]
+      (.write writer (.toString dataset)))
+    (CSVSaver/runFileSaver csv-saver (into-array String ["-i" sampled-dataset-arff-file
+                                                         "-o" sampled-dataset-file]))
     ;; Removing the `?` character for missing values
     ;; This can't be done with the `CSVSaver` API since
     ;; it doesn't accept empty values...
-    (spit sampled-training-set-file (-> (slurp sampled-training-set-file)
+    (spit sampled-dataset-file (-> (slurp sampled-dataset-file)
                                         (string/replace ",?," ",,")
                                         (string/replace ",?" ",")))))
 
@@ -149,9 +149,9 @@
         (map (fn [n] (get feature-map n)))
         (flatten)
         (into [])))
-  ([feature-names training-set-encoding feature-map]
-   (if (some? training-set-encoding)
+  ([feature-names dataset-encoding feature-map]
+   (if (some? dataset-encoding)
      (->> feature-map
-        (encoding/encode-feature-map training-set-encoding)
+        (encoding/encode-feature-map dataset-encoding)
         (feature-map-to-vector feature-names))
      (feature-map-to-vector feature-names feature-map))))

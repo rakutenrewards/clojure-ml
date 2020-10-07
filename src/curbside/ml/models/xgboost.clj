@@ -11,9 +11,9 @@
    [clojure.spec.alpha :as s]
    [clojure.string :as string]
    [clojure.walk :as walk]
-   [curbside.ml.training-sets.conversion :as conversion]
-   [curbside.ml.training-sets.encoding :as encoding]
-   [curbside.ml.training-sets.sampling :as sampling]
+   [curbside.ml.data.conversion :as conversion]
+   [curbside.ml.data.encoding :as encoding]
+   [curbside.ml.data.sampling :as sampling]
    [curbside.ml.utils.parsing :as parsing]
    [clojure.data.csv :as csv])
   (:import
@@ -38,9 +38,9 @@
    (->LabeledPoint label features)))
 
 (defn- ->DMatrix
-  [{:keys [features feature-maps labels groups weights] :as _training-set} training-set-encoding]
+  [{:keys [features feature-maps labels groups weights] :as _dataset} dataset-encoding]
   (let [vectors (->> feature-maps
-                     (map #(conversion/feature-map-to-vector features training-set-encoding %))
+                     (map #(conversion/feature-map-to-vector features dataset-encoding %))
                      (map #(->LabeledPoint %1 %2) labels))
         dm (DMatrix. (.iterator vectors) nil)]
     (when (some? groups)
@@ -66,11 +66,11 @@
   "Train an xgboost model on the provided training set. Accepts two maps.
 
   The first map describes the training set and contains the following keys:
-  - `:training-set-path`: path to a csv training set
-  - `:training-set-encoding` (optional):  encoding configuration of
-     the features (see `curbside.ml.training-sets.encoding`)
+  - `:dataset-path`: path to a csv dataset
+  - `:dataset-encoding` (optional):  encoding configuration of
+     the features (see `curbside.ml.data.encoding`)
   - `:example-weights-path`: path to a csv list listing the weight of
-    each examples (see `curbside.ml.training-sets.sampling`)
+    each examples (see `curbside.ml.data.sampling`)
   - `:example-groups-path`: path to a single column (group) csv file
     (used for ranking, see xgboost's official documentation).
 
@@ -79,11 +79,11 @@
 
   The second argument map is the hyperparameters of the models. See
   https://xgboost.readthedocs.io/en/latest/parameter.html#"
-  [training-set
-   training-set-encoding
+  [dataset
+   dataset-encoding
    {:keys [early-stopping-rounds num-rounds validation-set-size]
     :as hyperparameters}]
-  (let [dm (->DMatrix training-set training-set-encoding)
+  (let [dm (->DMatrix dataset dataset-encoding)
         [train val] (if (some? validation-set-size)
                       (split-DMatrix dm validation-set-size)
                       [dm nil])

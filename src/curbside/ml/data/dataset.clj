@@ -1,14 +1,14 @@
-(ns curbside.ml.training-sets.training-set
-  "Provides a general training set abstraction to be used by all ml models.
-  Contains utilities to load a training set from csv files and for various
+(ns curbside.ml.data.dataset
+  "Provides a general dataset abstraction to be used by all ml models.
+  Contains utilities to load a dataset from csv files and for various
   operations such as splitting.
 
-  A training set is defined as a map containing the following keys:
+  A dataset is defined as a map containing the following keys:
 
   - `:features` : a vector of keyword indicating which feature is present in each
      feature map. Note that the order is important, as the features are inputted
      in this order in ML models.
-  - `:feature-maps` : a vector of maps. Each map represents a single training example.
+  - `:feature-maps` : a vector of maps. Each map represents a single example.
   - `:labels` : a vector of numbers of the same length as `:feature-maps`. Lists the
      labels associated to each example.
   - `:weights` : a vector of numbers. Importance to attribute to each example,
@@ -23,7 +23,7 @@
    [clojure.spec.alpha :as s]
    [curbside.ml.utils.io :as io-utils]
    [curbside.ml.utils.spec :as spec-utils]
-   [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.data.conversion :as conversion]
    [clojure.java.io :as io]))
 
 ;; =============================================================================
@@ -54,7 +54,7 @@
       (= (count labels)
          (apply + groups))))
 
-(s/def ::training-set
+(s/def ::dataset
   (s/and
    (s/keys :req-un [::features
                     ::feature-maps
@@ -82,13 +82,13 @@
   (mapv :weight (conversion/csv-to-maps filepath)))
 
 (defn load-csv-files
-  "Loads a training-set map from csv files. The `training-set-path` must be
+  "Loads a dataset map from csv files. The `dataset-path` must be
   provided, while the others are optional. If `groups-path` is specified but not
   `weights-path`, a default weight of 1.0 is attributed to each group."
-  [training-set-path weights-path groups-path]
-  {:post [(spec-utils/check ::training-set %)]}
-  (let [features (rest (conversion/csv-column-keys training-set-path)) ;; Disregard the first column which is :label
-        maps (conversion/csv-to-maps training-set-path)
+  [dataset-path weights-path groups-path]
+  {:post [(spec-utils/check ::dataset %)]}
+  (let [features (rest (conversion/csv-column-keys dataset-path)) ;; Disregard the first column which is :label
+        maps (conversion/csv-to-maps dataset-path)
         groups (when (some? groups-path)
                  (load-groups groups-path))
         weights (if (some? weights-path)
@@ -105,15 +105,15 @@
       (assoc :groups groups))))
 
 (defn save-csv-files
-  "Saves a training set to csv files. Labels and feature maps are written to
-  `training-set-path`. The groups and weights are written to `weights-path` and
+  "Saves a dataset to csv files. Labels and feature maps are written to
+  `dataset-path`. The groups and weights are written to `weights-path` and
   `groups-path`, if present."
-  [{:keys [features feature-maps labels groups weights] :as _training-set}
-   training-set-path weights-path groups-path]
+  [{:keys [features feature-maps labels groups weights] :as _dataset}
+   dataset-path weights-path groups-path]
   ;; Write the features and labels
   (->> (map #(assoc %1 :label %2)
             feature-maps labels)
-       (conversion/maps-to-csv training-set-path
+       (conversion/maps-to-csv dataset-path
                                (cons :label features)))
   ;; Write groups
   (when (some? groups)
@@ -123,17 +123,17 @@
     (conversion/vector-to-csv weights-path "weight" weights)))
 
 (defn save-temp-csv-files
-  "Saves a training set to temporary csv files. Returns a map containing the path
-  of the temporary files created: `training-set-path`, `weights-path` (if
+  "Saves a dataset to temporary csv files. Returns a map containing the path
+  of the temporary files created: `dataset-path`, `weights-path` (if
   present) and `groups-path` (if present)."
-  [{:keys [groups weights] :as training-set}]
-  (let [training-set-path (io-utils/create-temp-csv-path)
+  [{:keys [groups weights] :as dataset}]
+  (let [dataset-path (io-utils/create-temp-csv-path)
         groups-path (when (some? groups)
                       (io-utils/create-temp-csv-path))
         weights-path (when (some? weights)
                        (io-utils/create-temp-csv-path))]
-    (save-csv-files training-set training-set-path weights-path groups-path)
-    (cond-> {:training-set-path training-set-path}
+    (save-csv-files dataset dataset-path weights-path groups-path)
+    (cond-> {:dataset-path dataset-path}
       (some? groups) (assoc :groups-path groups-path)
       (some? weights) (assoc :weights-path weights-path))))
 
@@ -147,9 +147,9 @@
     (< (Math/abs (- 1.0 sum)) 1e-8)))
 
 (defn select-examples
-  "Returns a subset a training-set containing only the specified `indices`."
-  [{:keys [weights] :as training-set} indices]
-  (-> training-set
+  "Returns a subset a dataset containing only the specified `indices`."
+  [{:keys [weights] :as dataset} indices]
+  (-> dataset
       (update :feature-maps mapv indices)
       (update :labels mapv indices)
       (cond-> (some? weights)
@@ -167,12 +167,12 @@
     (mapcat example-indices-per-group group-indices)))
 
 (defn select-groups
-  "Returns a subset a training-set containing only the specified `group-indices`,
+  "Returns a subset a dataset containing only the specified `group-indices`,
   which corresponds to indices of groups in the `:groups` vector. For example,
   if the `:groups` vector is `[2 2 2]` and the `group-indices` is `[1 2]`, this
   will return the examples 2 to 5 (both inclusive)."
-  [{:keys [weights groups] :as training-set} group-indices]
-  (-> training-set
+  [{:keys [weights groups] :as dataset} group-indices]
+  (-> dataset
       (dissoc :weights :groups)
       (select-examples (group->example-indices groups group-indices))
       (cond-> (seq weights)
@@ -201,44 +201,44 @@
       splits)))
 
 (defn split
-  "Splits a training set into multiple training sets. `fractions` is a one-sum
-  vector whose length determine the number of training-sets to create and whose
-  elements tell what fraction of the training-set to distribute is in each
+  "Splits a dataset into multiple datasets. `fractions` is a one-sum
+  vector whose length determine the number of datasets to create and whose
+  elements tell what fraction of the dataset to distribute is in each
   split.
 
-  Training sets having a group vector are split across group, while training
+  Datasets having a group vector are split across group, while training
   sets without group vectors are split across examples. `shuffle?` indicate
-  whether or not to shuffle examples (or groups) of the training set. The order
+  whether or not to shuffle examples (or groups) of the dataset. The order
   of the examples within a group won't be affected."
-  [{:keys [feature-maps groups] :as training-set} shuffle? fractions]
+  [{:keys [feature-maps groups] :as dataset} shuffle? fractions]
   {:pre [(fractions-sum-to-one? fractions)]}
   (if (some? groups)
-    (map #(select-groups training-set %)
+    (map #(select-groups dataset %)
          (indices-of-splits (count groups) shuffle? fractions))
-    (map #(select-examples training-set %)
+    (map #(select-examples dataset %)
          (indices-of-splits (count feature-maps) shuffle? fractions))))
 
-(defn concat-training-sets
+(defn concat-datasets
   [& ts]
   (let [features (:features (first ts))]
     (-> (apply merge-with into ts)
         (assoc :features features))))
 
 (defn k-fold-split
-  "Returns a sequence of `k` tuples where the first element is the training data
+  "Returns a sequence of `k` tuples where the first element is the datadata
   and the second the validation data.
   See https://en.wikipedia.org/wiki/Cross-validation_(statistics)"
-  [training-set shuffle? k]
-  (let [splits (split training-set shuffle? (repeat k (/ 1 k)))]
+  [dataset shuffle? k]
+  (let [splits (split dataset shuffle? (repeat k (/ 1 k)))]
     (for [i (range k)]
       (let [[valid-split & train-splits] (take k (drop i (cycle splits)))]
-        [(apply concat-training-sets train-splits)
+        [(apply concat-datasets train-splits)
          valid-split]))))
 
 (defn train-test-split
-  "Splits the `training-set` in two part for training and validation. The former
+  "Splits the `dataset` in two part for training and validation. The former
   contains `train-percent` of the data, while the latter contains the rest"
-  [training-set shuffle? train-percent]
-  (split training-set shuffle?
+  [dataset shuffle? train-percent]
+  (split dataset shuffle?
          [(/ train-percent 100)
           (/ (- 100 train-percent) 100)]))

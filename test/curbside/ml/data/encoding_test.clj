@@ -1,7 +1,7 @@
-(ns curbside.ml.training-sets.encoding-test
+(ns curbside.ml.data.encoding-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.training-sets.encoding :as encoding]))
+   [curbside.ml.data.encoding :as encoding]))
 
 (deftest test-create-one-hot-encoding
   (is (= (encoding/create-one-hot-encoding [1 2 3 5 5])

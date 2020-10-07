@@ -1,8 +1,8 @@
-(ns curbside.ml.training-sets.conversion-test
+(ns curbside.ml.data.conversion-test
   (:require
    [clojure.string :as string]
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.training-sets.conversion :as conversion]
+   [curbside.ml.data.conversion :as conversion]
    [curbside.ml.utils.io :as io-utils]
    [curbside.ml.utils.tests :as tutils]))
 

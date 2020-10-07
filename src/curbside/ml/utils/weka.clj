@@ -10,11 +10,11 @@
   file then the problem will be read from that file. If training is a set of Instances
   then that set of Instances will be returned. `class-col-index` is the index of the
   column where the class is represented."
-  [training-set & {:keys [class-col-index]}]
-  (let [instances (if (and (string? training-set) (.exists (io/as-file training-set)))
-                    (with-open [reader (io/reader training-set)]
+  [dataset & {:keys [class-col-index]}]
+  (let [instances (if (and (string? dataset) (.exists (io/as-file dataset)))
+                    (with-open [reader (io/reader dataset)]
                       (Instances. reader))
-                    training-set)]
+                    dataset)]
     (.setClassIndex instances (or class-col-index 0))
     instances))
 
