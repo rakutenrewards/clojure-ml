@@ -1,4 +1,4 @@
-(ns curbside.ml.training-sets.sampling
+(ns curbside.ml.data.sampling
   "Sampling a training set is the action of changing a training set in a way that
    we change the distribution of the classes, or we normalize it by adding or
    removing instances of the training set.
@@ -21,7 +21,7 @@
    5. Train for sensitivity and specificity "
   (:require
    [clojure.math.numeric-tower :as math :refer [expt sqrt]]
-   [curbside.ml.training-sets.training-set :as training-set]
+   [curbside.ml.data.dataset :as dataset]
    [curbside.ml.utils.spec :as spec-utils])
   (:import
    (weka.filters Filter)))
@@ -48,26 +48,26 @@
   (let [xsvec (vec xs)]
     (take n (repeatedly #(rand-nth xsvec)))))
 
-(defn sample-training-set
-  [training-set config]
-  {:pre [(spec-utils/check ::training-set/training-set training-set)]
-   :post [(spec-utils/check ::training-set/training-set %)]}
+(defn sample-dataset
+  [dataset config]
+  {:pre [(spec-utils/check ::dataset/dataset dataset)]
+   :post [(spec-utils/check ::dataset/dataset %)]}
 
   ;; TODO: support :bias-to-uniform-class config setting https://github.com/RakutenReady/Team/issues/52375
   (when (some? (:bias-to-uniform-class config))
     (throw (UnsupportedOperationException. "bias to uniform class not yet implemented.")))
 
   (let [config (merge default-sampling-config config)
-        n-values (if (some? (:groups training-set))
-                   (count (:groups training-set))
-                   (count (:feature-maps training-set)))
+        n-values (if (some? (:groups dataset))
+                   (count (:groups dataset))
+                   (count (:feature-maps dataset)))
         sample-size (config->sample-size n-values config)
         selected-indices (if (:without-replacement config)
                            (sample-no-replacement (range n-values) sample-size)
                            (sample-with-replacement (range n-values) sample-size))]
-    (if (some? (:groups training-set))
-      (training-set/select-groups training-set selected-indices)
-      (training-set/select-examples training-set selected-indices))))
+    (if (some? (:groups dataset))
+      (dataset/select-groups dataset selected-indices)
+      (dataset/select-examples dataset selected-indices))))
 
 ;; Sample weighting is related to sampling, and sets the relative importance of
 ;; individual rows of the training set based on their numerical attributes.

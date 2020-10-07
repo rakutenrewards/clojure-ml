@@ -27,9 +27,9 @@
 
 (deftest test-mask-logical-or
   (is (= [true false true true true]
-       (#'stats/masks-logical-or [[true false false true  true]
-                                  [true false false true  true]
-                                  [true false true  false true]]))))
+         (#'stats/masks-logical-or [[true false false true  true]
+                                    [true false false true  true]
+                                    [true false true  false true]]))))
 
 (deftest test-remove-iqr-outliers
   (is (= [1 2 10 2 5 0 4]

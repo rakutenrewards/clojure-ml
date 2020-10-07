@@ -1,12 +1,14 @@
-(ns curbside.ml.training-sets.conversion
-  (:require [clojure.java.io :as io]
-            [clojure.data.csv :as csv]
-            [clojure.string :as string]
-            [curbside.ml.training-sets.encoding :as encoding]
-            [curbside.ml.utils.parsing :as parsing])
-  (:import (weka.core.converters CSVSaver)
-           (weka.filters Filter)
-           (weka.filters.unsupervised.attribute NumericToNominal)))
+(ns curbside.ml.data.conversion
+  (:require
+   [clojure.data.csv :as csv]
+   [clojure.java.io :as io]
+   [clojure.string :as string]
+   [curbside.ml.data.encoding :as encoding]
+   [curbside.ml.utils.parsing :as parsing])
+  (:import
+   (weka.core.converters CSVSaver)
+   (weka.filters Filter)
+   (weka.filters.unsupervised.attribute NumericToNominal)))
 
 (defn csv-to-libsvm
   "convert a csv training set file into a libsvm one. the first column is the
@@ -64,19 +66,19 @@
      arff)))
 
 (defn arff-to-csv
-  [training-set sampled-training-set-file]
-  (let [sampled-training-set-arff-file (string/replace sampled-training-set-file ".csv" ".arff")
+  [dataset sampled-dataset-file]
+  (let [sampled-dataset-arff-file (string/replace sampled-dataset-file ".csv" ".arff")
         csv-saver (CSVSaver.)]
-    (with-open [writer (io/writer sampled-training-set-arff-file)]
-      (.write writer (.toString training-set)))
-    (CSVSaver/runFileSaver csv-saver (into-array String ["-i" sampled-training-set-arff-file
-                                                         "-o" sampled-training-set-file]))
+    (with-open [writer (io/writer sampled-dataset-arff-file)]
+      (.write writer (.toString dataset)))
+    (CSVSaver/runFileSaver csv-saver (into-array String ["-i" sampled-dataset-arff-file
+                                                         "-o" sampled-dataset-file]))
     ;; Removing the `?` character for missing values
     ;; This can't be done with the `CSVSaver` API since
     ;; it doesn't accept empty values...
-    (spit sampled-training-set-file (-> (slurp sampled-training-set-file)
-                                        (string/replace ",?," ",,")
-                                        (string/replace ",?" ",")))))
+    (spit sampled-dataset-file (-> (slurp sampled-dataset-file)
+                                   (string/replace ",?," ",,")
+                                   (string/replace ",?" ",")))))
 
 (defn csv-column-keys
   "Returns the keys in the CSV's header. The keys are put in a vector in the same
@@ -149,9 +151,9 @@
         (map (fn [n] (get feature-map n)))
         (flatten)
         (into [])))
-  ([feature-names training-set-encoding feature-map]
-   (if (some? training-set-encoding)
+  ([feature-names dataset-encoding feature-map]
+   (if (some? dataset-encoding)
      (->> feature-map
-        (encoding/encode-feature-map training-set-encoding)
-        (feature-map-to-vector feature-names))
+          (encoding/encode-feature-map dataset-encoding)
+          (feature-map-to-vector feature-names))
      (feature-map-to-vector feature-names feature-map))))

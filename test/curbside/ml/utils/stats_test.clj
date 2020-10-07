@@ -98,11 +98,11 @@
 
 (deftest test-ranking-precision
   (is (== 1 (stats/ranking-precision 2
-                                   [0.1 0.2 0.3 0.4]
-                                   [0 0 3 2])))
+                                     [0.1 0.2 0.3 0.4]
+                                     [0 0 3 2])))
   (is (== 0.5 (stats/ranking-precision 2
-                                   [0.4 0.2 0.3 0.1]
-                                   [0 1 1 1])))
+                                       [0.4 0.2 0.3 0.1]
+                                       [0 1 1 1])))
   (is (== 0.75 (stats/ranking-precision 4
                                         [0.4 0.2 0.3 0.1]
                                         [0 1 1 1])))

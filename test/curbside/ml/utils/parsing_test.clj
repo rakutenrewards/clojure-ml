@@ -1,10 +1,10 @@
 (ns curbside.ml.utils.parsing-test
   (:require
+   [clojure.spec.alpha :as s]
+   [clojure.spec.gen.alpha :as gen]
    [clojure.test :refer [deftest is testing]]
    [clojure.test.check.clojure-test :refer [defspec]]
    [clojure.test.check.properties :as prop]
-   [clojure.spec.alpha :as s]
-   [clojure.spec.gen.alpha :as gen]
    [curbside.ml.utils.parsing :as parsing]))
 
 (deftest test-parse-or-identity

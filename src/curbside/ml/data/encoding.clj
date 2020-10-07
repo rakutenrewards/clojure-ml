@@ -1,4 +1,4 @@
-(ns curbside.ml.training-sets.encoding
+(ns curbside.ml.data.encoding
   "Feature encoding consists of representing features in an alternative
   representation to facilitate learning. This is mainly used to represent
   categorical features as numbers to input them to a machine learning model."
@@ -29,8 +29,7 @@
 
 (s/def ::features (s/map-of ::feature ::encoding-fn))
 
-(s/def ::training-set-encoding (s/keys :req-un [::features]))
-
+(s/def ::dataset-encoding (s/keys :req-un [::features]))
 
 (defn- identity-matrix
   "Returns an identity matrix of size `n`."
@@ -58,9 +57,9 @@
     :one-hot (one-hot-encode-value encoding-fn value)))
 
 (defn encode-feature-map
-  [training-set-encoding feature-map]
-  {:pre [(spec-utils/check ::training-set-encoding training-set-encoding)]}
+  [dataset-encoding feature-map]
+  {:pre [(spec-utils/check ::dataset-encoding dataset-encoding)]}
   (reduce (fn [feature-map [feature encoding-fn]]
             (update feature-map feature (partial encode-value encoding-fn)))
           feature-map
-          (:features training-set-encoding)))
+          (:features dataset-encoding)))

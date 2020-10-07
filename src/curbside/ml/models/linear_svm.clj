@@ -7,10 +7,10 @@
   (:require
    [clojure.java.io :as io]
    [clojure.spec.alpha :as s]
-   [curbside.ml.training-sets.conversion :as conversion])
+   [curbside.ml.data.conversion :as conversion])
   (:import
-   (java.io File)
-   (de.bwaldvogel.liblinear Linear SolverType Problem Parameter Model FeatureNode)))
+   (de.bwaldvogel.liblinear FeatureNode Linear Model Parameter Problem SolverType)
+   (java.io File)))
 
 (s/def ::c (s/double-in :infinite? false :NaN? false))
 (s/def ::p (s/double-in :infinite? false :NaN? false))
@@ -41,17 +41,17 @@
                               :weights nil})
 
 (defn- to-temp-svm-file
-  [training-set-csv-path]
+  [dataset-csv-path]
   (let [file (doto (File/createTempFile "data_" ".csv")
                (.deleteOnExit))
         temp-svm-path (.getPath file)]
-    (conversion/csv-to-libsvm training-set-csv-path temp-svm-path)
+    (conversion/csv-to-libsvm dataset-csv-path temp-svm-path)
     file))
 
 (defn- problem
   "Define a problem space by reading a CSV training set."
-  [training-set-csv-path]
-  (-> training-set-csv-path
+  [dataset-csv-path]
+  (-> dataset-csv-path
       (to-temp-svm-file)
       (io/file)
       (#(Problem/readFromFile % 0.0))))
@@ -80,8 +80,8 @@
     parameters))
 
 (defn train
-  [training-set-csv-path hyperparameters]
-  (Linear/train (problem training-set-csv-path) (parameters hyperparameters)))
+  [dataset-csv-path hyperparameters]
+  (Linear/train (problem dataset-csv-path) (parameters hyperparameters)))
 
 (defn save
   [model filepath]
@@ -99,9 +99,9 @@
   returns nil otherwise it returns the FeatureNode"
   [index value]
   (when-let [value (if (string? value)
-                       (when-not (empty? value)
-                         (Double/parseDouble value))
-                       value)]
+                     (when-not (empty? value)
+                       (Double/parseDouble value))
+                     value)]
     (new FeatureNode (inc index) value)))
 
 (defn predict

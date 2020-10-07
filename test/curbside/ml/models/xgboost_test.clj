@@ -1,19 +1,19 @@
 (ns curbside.ml.models.xgboost-test
   (:require
-   [clojure.core.async :refer [alts!! timeout thread-call]]
+   [clojure.core.async :refer [alts!! thread-call timeout]]
+   [clojure.java.io :as io]
    [clojure.test :refer [deftest is testing]]
+   [curbside.ml.data.conversion :as conversion]
+   [curbside.ml.data.dataset :as dataset]
    [curbside.ml.models.xgboost :as xgboost]
-   [curbside.ml.training-sets.conversion :as conversion]
-   [curbside.ml.training-sets.training-set :as training-set]
    [curbside.ml.utils.io :as io-utils]
-   [curbside.ml.utils.tests :as tutils]
-   [clojure.java.io :as io])
+   [curbside.ml.utils.tests :as tutils])
   (:import
-   [java.util Arrays]
-   [ml.dmlc.xgboost4j.java Booster]))
+   (java.util Arrays)
+   (ml.dmlc.xgboost4j.java Booster)))
 
 (deftest test-split-dmatrix
-  (let [dm (#'xgboost/->DMatrix (training-set/load-csv-files tutils/dummy-regression-single-label-training-set-path nil nil) nil)
+  (let [dm (#'xgboost/->DMatrix (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil) nil)
         [dm1 dm2] (#'xgboost/split-DMatrix dm 0.2)]
     (is (= 9 (.rowNum dm1)))
     (is (= 2 (.rowNum dm2)))))
@@ -21,21 +21,21 @@
 (deftest test-train-and-predict-regression
   (testing "given a dataset with a single label, when training, then the model always return a prediction close to this label."
     (let [hyperparameters {:verbosity 3 :num-rounds 5 :booster "dart" :learning_rate 0.9 :objective "reg:squarederror"}
-          training-set (training-set/load-csv-files tutils/dummy-regression-single-label-training-set-path nil nil)
-          model (xgboost/train training-set nil hyperparameters)
+          dataset (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil)
+          model (xgboost/train dataset nil hyperparameters)
           prediction (xgboost/predict model hyperparameters [0 0])]
       (is (tutils/approx= 0.0 prediction 1e-1)))))
 
 (deftest test-train-and-predict-ranking
   (testing "given a dummy ranking dataset, when training, then the model can be used to predict"
     (let [hyperparameters {:num-rounds 5 :max_depth 5 :learning_rate 0.99 :objective "rank:ndcg"}
-          training-set (training-set/load-csv-files
-                        tutils/dummy-ranking-training-set-path
-                        nil
-                        tutils/dummy-ranking-training-set-groups-path)
+          dataset (dataset/load-csv-files
+                   tutils/dummy-ranking-dataset-path
+                   nil
+                   tutils/dummy-ranking-dataset-groups-path)
           model (xgboost/train
-                 training-set
-                 tutils/dummy-ranking-training-set-encoding
+                 dataset
+                 tutils/dummy-ranking-dataset-encoding
                  hyperparameters)
           prediction (xgboost/predict model hyperparameters [0 1 2 3 4 5])]
       (is (tutils/approx= prediction 0.5 1e-1))))) ;; Regression test
@@ -46,11 +46,11 @@
                            :learning_rate 0.9 :objective "reg:squarederror"
                            :weight-mean 0.5 :weight-label-name "label"
                            :weight-stddev 1.0}
-          training-set (training-set/load-csv-files tutils/dummy-regression-single-label-training-set-path
-                                                    tutils/dummy-example-weights-path
-                                                    nil)
+          dataset (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path
+                                          tutils/dummy-example-weights-path
+                                          nil)
           model (xgboost/train
-                 training-set
+                 dataset
                  nil
                  hyperparameters)
           prediction (xgboost/predict model hyperparameters [0 0])]
@@ -63,9 +63,9 @@
            :validation-set-size 0.5
            :early-stopping-rounds 5}
           timeout-ch (timeout 2000)
-          training-set (training-set/load-csv-files tutils/dummy-regression-single-label-training-set-path nil nil)
+          dataset (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil)
           model-ch (thread-call
-                    #(xgboost/train training-set nil hyperparameters))
+                    #(xgboost/train dataset nil hyperparameters))
           [v c] (alts!! [timeout-ch model-ch])]
       (is (= c model-ch))
       (is (= Booster (type (:xgboost-model v)))))))
@@ -73,9 +73,9 @@
 (deftest test-save-and-load-model
   (testing "given a trained model, when saving and loading, then the loaded model is the model that was saved."
     (let [hyperparameters {:booster "gbtree"}
-          training-set (training-set/load-csv-files tutils/dummy-regression-single-label-training-set-path nil nil)
+          dataset (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil)
           model (xgboost/train
-                 training-set
+                 dataset
                  nil
                  hyperparameters)
           model-path (io-utils/create-temp-path ".xgb")]

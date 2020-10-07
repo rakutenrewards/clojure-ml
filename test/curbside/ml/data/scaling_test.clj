@@ -1,7 +1,7 @@
-(ns curbside.ml.training-sets.scaling-test
+(ns curbside.ml.data.scaling-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.training-sets.scaling :as scaling]))
+   [curbside.ml.data.scaling :as scaling]))
 
 (def a-feature-map {:x 10 :y  -2 :z 1000 :unknown nil :label 10})
 
@@ -10,9 +10,9 @@
 (deftest test-min-max-scaling
   (testing "given a number, when scaling and unscaling it, then it still have the same value"
     (is (as-> 2 value
-            (scaling/apply-scaling :min-max value {:min 0 :max 10})
-            (scaling/apply-unscaling :min-max value {:min 0 :max 10})
-            (== 2 value))))
+          (scaling/apply-scaling :min-max value {:min 0 :max 10})
+          (scaling/apply-unscaling :min-max value {:min 0 :max 10})
+          (== 2 value))))
 
   (testing "given a number, when applying scaling, then the number is scaled"
     (is (== 0.2 (scaling/apply-scaling :min-max 2 {:min 0 :max 10}))))
@@ -55,11 +55,11 @@
   (testing "given a negative value, when applying scaling, it returns a small value instead of negative infinity"
     (is (== scaling/min-log10-value (scaling/apply-scaling :log10 -2 nil)))))
 
-(def a-training-set (repeat 3 a-feature-map))
-(def training-set-scaling-factors {:features [min-max-features-factors]
-                                 :labels [{}]})
+(def a-dataset (repeat 3 a-feature-map))
+(def dataset-scaling-factors {:features [min-max-features-factors]
+                              :labels [{}]})
 
-(defn is-training-set-example-scaled?
+(defn is-dataset-example-scaled?
   [{:keys [x y z unknown label]}]
   (is (== 0.5 x))
   (is (== 0.3 y))
@@ -67,18 +67,18 @@
   (is (nil? unknown))
   (is (== 1 label)))
 
-(deftest test-scale-training-set
+(deftest test-scale-dataset
   (testing "given a training set, when scaling, all features and labels are scaled"
-    (let [scaled-set (scaling/scale-training-set [:min-max]
-                                                 [:log10]
-                                                 training-set-scaling-factors
-                                                 a-training-set)]
+    (let [scaled-set (scaling/scale-dataset [:min-max]
+                                            [:log10]
+                                            dataset-scaling-factors
+                                            a-dataset)]
       (doseq [example scaled-set]
-        (is-training-set-example-scaled? example)))))
+        (is-dataset-example-scaled? example)))))
 
 (deftest test-unscale-label
   (testing "given an inferred value, when unscaling, the value is unscaled"
-    (is (== 0.1 (scaling/unscale-label [:log10] training-set-scaling-factors -1))))
+    (is (== 0.1 (scaling/unscale-label [:log10] dataset-scaling-factors -1))))
   (testing "given multiple scaling functions, when unscaling, the value is unscaled."
     (let [factors {:features [] :labels [{:min 0 :max 100} {}]}]
       (is (== 100 (scaling/unscale-label [:min-max :log10] factors 0))))))
