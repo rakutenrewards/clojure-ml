@@ -2,6 +2,7 @@
   (:require
    [clojure.set :as set])
   (:import
+   (org.apache.commons.math3.stat.descriptive.moment StandardDeviation)
    (weka.classifiers.evaluation ConfusionMatrix)))
 
 (defn- sum-column
@@ -87,6 +88,11 @@
   [xs]
   (/ (kahan-sum xs)
      (count xs)))
+
+(defn stddev
+  [xs]
+  (.evaluate (StandardDeviation.)
+             (double-array xs)))
 
 (defn- absolute-error
   [prediction label]
