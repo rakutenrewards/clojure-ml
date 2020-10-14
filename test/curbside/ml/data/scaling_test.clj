@@ -1,9 +1,10 @@
 (ns curbside.ml.data.scaling-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.data.scaling :as scaling]))
+   [curbside.ml.data.scaling :as scaling]
+   [curbside.ml.utils.tests :as tutils]))
 
-(def a-feature-map {:x 10 :y  -2 :z 1000 :unknown nil :label 10})
+(def a-feature-map {:x 10 :y  -2 :z 1000 :unknown nil})
 
 (def min-max-features-factors {:x {:min 0 :max 20} :y {:min -5 :max 5}})
 
@@ -25,8 +26,7 @@
       (is (== 0.5 (:x  scaled-map)))
       (is (== 0.3 (:y  scaled-map)))
       (is (== 1000 (:z  scaled-map)))
-      (is (nil? (:unknown  scaled-map)))
-      (is (== 10 (:label scaled-map))))))
+      (is (nil? (:unknown  scaled-map))))))
 
 (def log10-features-factors {:x {} :z {}})
 
@@ -48,33 +48,42 @@
       (is (== 1 (:x  scaled-map)))
       (is (== -2 (:y  scaled-map)))
       (is (== 3 (:z  scaled-map)))
-      (is (nil? (:unknown  scaled-map)))
-      (is (== 10 (:label scaled-map))))))
+      (is (nil? (:unknown  scaled-map))))))
 
 (deftest test-log10-scaling-min-max-values
   (testing "given a negative value, when applying scaling, it returns a small value instead of negative infinity"
     (is (== scaling/min-log10-value (scaling/apply-scaling :log10 -2 nil)))))
 
-(def a-dataset (repeat 3 a-feature-map))
-(def dataset-scaling-factors {:features [min-max-features-factors]
-                              :labels [{}]})
+(def a-dataset
+  {:feature-maps [{:a 0, :b 0}
+                  {:a 2, :b -1}
+                  {:a 6, :b -0.5}
+                  {:a 10, :b 0}]
+   :features [:a :b]
+   :labels [10 100 1000 10000]})
 
-(defn is-dataset-example-scaled?
-  [{:keys [x y z unknown label]}]
-  (is (== 0.5 x))
-  (is (== 0.3 y))
-  (is (== 1000 z))
-  (is (nil? unknown))
-  (is (== 1 label)))
+(def expected-factors {:features [{:a {:min 0 :max 10}
+                                   :b {:min -1 :max 0}}]
+                       :labels [{}]})
+
+(def expected-scaled-dataset
+  {:feature-maps [{:a 0.0, :b 1.0}
+                  {:a 0.2, :b 0.0}
+                  {:a 0.6, :b 0.5}
+                  {:a 1.0, :b 1.0}]
+   :features [:a :b]
+   :labels [1.0 2.0 3.0 4.0]})
 
 (deftest test-scale-dataset
   (testing "given a training set, when scaling, all features and labels are scaled"
-    (let [scaled-set (scaling/scale-dataset [:min-max]
-                                            [:log10]
-                                            dataset-scaling-factors
-                                            a-dataset)]
-      (doseq [example scaled-set]
-        (is-dataset-example-scaled? example)))))
+    (let [[scaled-dataset factors] (scaling/scale-dataset [:min-max]
+                                                          [:log10]
+                                                          a-dataset)]
+      (is (tutils/approx= expected-scaled-dataset scaled-dataset 1e-6))
+      (is (= expected-factors factors)))))
+
+(def dataset-scaling-factors {:features [min-max-features-factors]
+                              :labels [{}]})
 
 (deftest test-unscale-label
   (testing "given an inferred value, when unscaling, the value is unscaled"

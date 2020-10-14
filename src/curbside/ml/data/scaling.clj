@@ -14,7 +14,7 @@
    configuration spec is detailed [here](file:~/curbside-prediction/org/src/curbside/prediction/pipeline.org::*Scale%20Training%20Sets)."
   (:require
    [clojure.spec.alpha :as s]
-   [curbside.ml.data.conversion :as conversion]
+   [curbside.ml.data.dataset :as dataset]
    [medley.core :as medley]))
 
 (defmulti compute-factors
@@ -62,7 +62,7 @@
 (s/def ::max number?)
 (s/def ::min-max-factors (s/and (s/keys :req-un [::min ::max])
                                 (fn [{:keys [min max]}]
-                                  (< min max))))
+                                  (<= min max))))
 (s/def ::log10-factors map?)
 
 (s/def ::value-factors (s/or :min-max ::min-max-factors
@@ -74,18 +74,17 @@
 
 (defn- min-max-feature
   [feature dataset]
-  (let [values (keep feature dataset)]
+  (let [values (keep feature (:feature-maps dataset))]
     (if (empty? values)
       {:min Double/MIN_VALUE :max Double/MAX_VALUE}
       {:min (apply min values) :max (apply max values)})))
 
 (defmethod compute-factors :min-max
   [_ dataset]
-  (let [features (remove #(= :label %) (keys (first dataset)))]
-    (reduce (fn [factors feature]
-              (assoc factors feature (min-max-feature feature dataset)))
-            {}
-            features)))
+  (reduce (fn [factors feature]
+            (assoc factors feature (min-max-feature feature dataset)))
+          {}
+          (:features dataset)))
 
 (defmethod apply-scaling :min-max
   [_ value {:keys [min max] :as factors}]
@@ -133,48 +132,52 @@
           feature-map
           (map vector scaling-fns (:features factors))))
 
-(defn scale-dataset-features
-  "Scales the features a training set, which is a collection of feature maps."
+(defn scale-dataset-feature-maps
+  "Scales the feature-maps  of a dataset."
   [scaling-fns factors dataset]
-  (map (partial scale-feature-map scaling-fns factors) dataset))
+  (let [feature-maps (mapv #(scale-feature-map scaling-fns factors %)
+                           (:feature-maps dataset))]
+    (assoc dataset :feature-maps feature-maps)))
 
 (defn scale-dataset-labels
-  "Scales the `:label` key of the all the feature maps, successively applying
+  "Scales the `:labels` of a dataset, successively applying
   the `scaling-fns`."
   [scaling-fns factors dataset]
   (reduce (fn [dataset [scaling-fn factors]]
-            (map #(update % :label (partial apply-scaling scaling-fn) factors) dataset))
+            (let [labels (mapv #(apply-scaling scaling-fn % factors)
+                               (:labels dataset))]
+              (assoc dataset :labels labels)))
           dataset
           (map vector scaling-fns (:labels factors))))
-
-(defn scale-dataset
-  "Scales the features and the labels of a training set."
-  [feature-scaling-fns label-scaling-fns factors dataset]
-  {:pre [(s/valid? ::dataset-factors factors)]}
-  (->> dataset
-       (scale-dataset-features feature-scaling-fns factors)
-       (scale-dataset-labels label-scaling-fns factors)))
 
 (defn- scaling-factors
   "Compute the `factors` used to scale a training set."
   [feature-scaling-fns label-scaling-fns dataset]
+  {:post [(s/valid? ::dataset-factors %)]}
   (letfn [(compute-all-factors [scaling-fns]
             (mapv #(compute-factors % dataset) scaling-fns))]
     {:features (compute-all-factors feature-scaling-fns)
      :labels (compute-all-factors label-scaling-fns)}))
+
+(defn scale-dataset
+  "Scales the feature-maps and the labels of a training set. Returns a tuple of
+  two elements: the scaled dataset and a map of scaling factors."
+  [feature-scaling-fns label-scaling-fns dataset]
+  (let [factors (scaling-factors feature-scaling-fns label-scaling-fns dataset)
+        scaled-dataset (->> dataset
+                            (scale-dataset-feature-maps feature-scaling-fns factors)
+                            (scale-dataset-labels label-scaling-fns factors))]
+    [scaled-dataset factors]))
 
 (defn scale-dataset-csv
   "Scales a training set encoded in the file at `input-csv-path`. The scaled set
   is outputted at `outpt-csv-file`, and the scaling factors used to perform
   scaling are saved at `edn-factors-path`."
   [input-csv-path output-csv-file edn-factors-path feature-scaling-fns label-scaling-fns]
-  (let [dataset        (conversion/csv-to-maps input-csv-path)
-        factors             (scaling-factors feature-scaling-fns label-scaling-fns dataset)
-        scaled-set          (scale-dataset feature-scaling-fns label-scaling-fns factors dataset)]
+  (let [dataset (dataset/load-csv-files input-csv-path nil nil)
+        [scaled-dataset factors] (scale-dataset feature-scaling-fns label-scaling-fns dataset)]
     (spit edn-factors-path (pr-str factors))
-    (conversion/maps-to-csv output-csv-file
-                            (conversion/csv-column-keys input-csv-path)
-                            scaled-set)))
+    (dataset/save-csv-files scaled-dataset output-csv-file nil nil)))
 
 (defn unscale-label
   "Unscaled a single value, successively unscaling the `scaling-fns` in reverse
