@@ -4,6 +4,8 @@
    [curbside.ml.utils.stats :as stats-utils]))
 
 (defn num-distinct-values
+  "Returns the number of distinct values, which is the number of values are
+  duplicate removal."
   [values]
   (count (set values)))
 
@@ -24,6 +26,8 @@
   (count values))
 
 (defn num-unique-values
+  "Returns the number of unique values, which are values that appear a single time
+  in the sequence."
   [values]
   (count (->> values
               (group-by identity)
