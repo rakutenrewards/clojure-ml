@@ -29,9 +29,47 @@
 (def dummy-ranking-dataset-encoding
   (edn/read-string (slurp (io/resource "datasets/dummy-ranking.encoding.edn"))))
 
+(declare approx=)
+
+(defn- approx=-seqs
+  [x y epsilon]
+  (and
+   (= (count x) (count y))
+   (every? true? (map #(approx= %1 %2 epsilon) x y))))
+
+(defn- approx=-maps
+  [x y epsilon]
+  (let [x-ks (keys x)]
+    (and
+     (= (set x-ks) (set (keys y)))
+     (every? true? (map #(approx= %1 %2 epsilon)
+                        (vals x)
+                        (map #(get y %) x-ks)))))) ;; ensure the same key order for x and y
+
 (defn approx=
-  [x y tolerance]
-  (< (Math/abs (- x y)) tolerance))
+  [x y epsilon]
+  (cond
+    (and (number? x)
+         (number? y))
+    (< (Math/abs (- x y)) epsilon)
+
+    (and (keyword? x)
+         (keyword? y))
+    (= x y)
+
+    (and (sequential? x)
+         (sequential? y))
+    (approx=-seqs x y epsilon)
+
+    (and (map? x)
+         (map? y))
+    (approx=-maps x y epsilon)
+
+    (= (type x) (type y)) ;; any type but the ones above
+    (= x y)
+
+    :else
+    false))
 
 (defmacro stubbing-private
   "Allows using Conjure's `stubbing` macro with private definitions."
