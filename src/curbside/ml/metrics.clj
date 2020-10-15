@@ -155,15 +155,10 @@
                   {(get-attribute-key (int id) instances) rank}))
            (apply merge)))))
 
-(defn- get-training-instances
-  [dataset-csv-path predictor-type]
-  (weka/problem
-   (conversion/csv-to-arff dataset-csv-path predictor-type)))
-
 (defn feature-metrics
-  [dataset-csv-path predictor-type evaluators]
+  [dataset predictor-type evaluators]
   {:pre [(spec-utils/check ::evaluators evaluators)]}
-  (let [instances (get-training-instances dataset-csv-path predictor-type)]
+  (let [instances (weka/dataset->weka-instances dataset predictor-type)]
     (reduce (fn [metrics evaluator]
               (assoc metrics evaluator (evaluate-feature evaluator instances)))
             {}
