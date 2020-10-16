@@ -6,7 +6,8 @@
    [curbside.ml.data.encoding :as encoding]
    [curbside.ml.utils.parsing :as parsing])
   (:import
-   (weka.core.converters CSVSaver)
+   (java.io ByteArrayOutputStream PipedInputStream)
+   (weka.core.converters CSVLoader CSVSaver)
    (weka.filters Filter)
    (weka.filters.unsupervised.attribute NumericToNominal)))
 
@@ -40,19 +41,16 @@
   is Weka's internal training set format. It is basically a CSV file with
   special header information that describes each of the columns.
 
-  With the ARFF format, when we take a CSV file and convert it into ARFF, all
-  the attributes (features) of the dataset are marked as =numeric= features
-  including the =label= column. Depending on the algorithm used the type of the
-  =label= attribute needs to be =nominal= or =numeric=. This is the reason why
-  we have a =class-type= optional parameter that will instruct the function how
-  we have to define the =label= attribute. This determination is performed
-  sooner in the training pipeline. The way to perform this transformation in
-  Weka is by using an 'attribute filter' . That attribute filter will convert a
-  numeric attribute in a nominal one and will take care to properly create the
-  enumeration of possible classes."
+  With the ARFF format, when we take a CSV file and convert it into ARFF. The
+  conversion handles both numerical and categorical columns. Missing values are
+  also properly marked as `?` values in the resulting ARFF. Depending on the
+  algorithm used the type of the =label= attribute needs to be =nominal= or
+  =numeric=. This is the reason why we have a =class-type= optional parameter
+  that will instruct the function how we have to define the =label= attribute."
   ([csv-file predictor-type]
-   (let [arff (weka.core.converters.ConverterUtils$DataSource. csv-file)
-         instances (doto (.getDataSet arff) (.setClassIndex 0))]
+   (let [csv-file (if (string? csv-file) (io/as-file csv-file) csv-file)
+         loader (doto (CSVLoader.) (.setSource csv-file))
+         instances (doto (.getDataSet loader) (.setClassIndex 0))]
      (if (= :classification predictor-type)
        (let [filter (doto (NumericToNominal.)
                       (.setOptions (into-array String ["-R" "first"]))
