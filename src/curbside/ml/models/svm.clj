@@ -4,10 +4,10 @@
    [LIBSVM](https://www.csie.ntu.edu.tw/~cjlin/libsvm/) library."
   (:refer-clojure :exclude [load])
   (:require
-   [clojure.data.csv :as csv]
    [clojure.java.io :as io]
    [clojure.spec.alpha :as s]
    [clojure.string :as str]
+   [curbside.ml.data.conversion :as conversion]
    [curbside.ml.utils.parsing :as parsing])
   (:import
    (clojure.lang Reflector)
@@ -79,34 +79,29 @@
                               :weight (double-array 0) ; for c-svc
                               :weight-label (int-array 0)}) ; for c-svc
 
-(defn- dataset-path->problem
-  "Define a problem space by reading a CSV training set. If training is a CSV
-  file then the problem will be read from that file. If training is a sequence
-  that define the problem, then the problem will be created from that sequence."
-  [dataset-path]
-  (let [dataset (if (and (string? dataset-path)
-                         (.exists (io/as-file dataset-path)))
-                  (rest
-                   (with-open [in-file (io/reader dataset-path)]
-                     (doall (csv/read-csv in-file))))
-                  (throw (Exception. (str "File doesn't exist: " dataset-path))))
-        problem (new svm_problem)]
-    (set! (.l problem) (count dataset))
-    (set! (.y problem) (double-array (->> dataset
-                                          (mapv (fn [[label & _features]]
-                                                  (parsing/parse-double label))))))
-    (set! (.x problem) (into-array
-                        (->> dataset
-                             (map (fn [[_label & features]]
-                                    (into-array
-                                     (sort-by #(.index %)
-                                              (->> features
-                                                   (keep-indexed (fn [index feature]
-                                                                   (when-let [feature (parsing/parse-double feature)]
-                                                                     (let [node (new svm_node)]
-                                                                       (set! (. node index) (inc index))
-                                                                       (set! (. node value) feature)
-                                                                       node))))))))))))
+(defn- feature-vector->svm-node-array
+  [feature-vector]
+  (->> feature-vector
+       (keep-indexed
+        (fn [i x]
+          (when (number? x)
+            (let [node (new svm_node)]
+              (set! (. node index) (inc i))
+              (set! (. node value) x)
+              node))))
+       (into-array)))
+
+(defn- dataset->problem
+  "Define a problem space from a dataset."
+  [{:keys [labels feature-maps features]}]
+  (let [problem (new svm_problem)]
+    (set! (.l problem) (count labels))
+    (set! (.y problem) (double-array labels))
+    (set! (.x problem)
+          (->> feature-maps
+               (map #(conversion/feature-map-to-vector features %))
+               (map feature-vector->svm-node-array)
+               (into-array)))
     problem))
 
 (defn- format-hyperparameters
@@ -122,8 +117,8 @@
 
 (defn train
   "Train a Linear SVM model for a given problem with specified parameters"
-  [dataset-path hyperparameters]
-  (let [problem-obj (dataset-path->problem dataset-path)
+  [dataset hyperparameters]
+  (let [problem-obj (dataset->problem dataset)
         params-obj (format-hyperparameters hyperparameters)]
     (when-let [error (svm/svm_check_parameter problem-obj params-obj)]
       (throw (Exception. error)))
