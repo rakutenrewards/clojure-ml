@@ -31,7 +31,6 @@
       iteration count)."
   (:refer-clojure :exclude [load])
   (:require
-   [clojure.data.csv :as csv]
    [clojure.java.io :as io]
    [clojure.math.combinatorics :as combinatorics]
    [clojure.spec.alpha :as s]
@@ -89,8 +88,8 @@
   (xgboost/load filepath))
 
 (defmethod train :xgboost
-  [_ predictor-type dataset-path params & [weights-path groups-path]]
-  (xgboost/train (dataset/load-csv-files dataset-path weights-path groups-path)
+  [_ predictor-type dataset params]
+  (xgboost/train dataset
                  nil ;; TODO support passing a the dataset encoding. This may result in breaking changes in the API
                  params))
 
@@ -159,8 +158,8 @@
   (svm/load filepath))
 
 (defmethod train :svm
-  [_ _predictor-type dataset-path hyperparameters & _]
-  (svm/train dataset-path hyperparameters))
+  [_ _predictor-type dataset hyperparameters & _]
+  (svm/train dataset hyperparameters))
 
 (defmethod predict :svm
   [_ _predictor-type model seleted-features hyperparameters feature-vector]
@@ -175,8 +174,8 @@
   (linear-svm/load filepath))
 
 (defmethod train :lsvm
-  [_ _predictor-type dataset-csv-path hyperparameters & _]
-  (linear-svm/train dataset-csv-path hyperparameters))
+  [_ _predictor-type dataset hyperparameters & _]
+  (linear-svm/train dataset hyperparameters))
 
 (defmethod predict :lsvm
   [_ _predictor-type model _selected-features _hyperparameters feature-vector]
@@ -232,8 +231,7 @@
 (defn- train-and-infer
   [algorithm predictor-type selected-features hyperparameters
    scaling-factors label-scaling-fns dataset validation-set]
-  (let [{:keys [dataset-path weights-path groups-path]} (dataset/save-temp-csv-files dataset)
-        model (train algorithm predictor-type dataset-path hyperparameters weights-path groups-path)
+  (let [model (train algorithm predictor-type dataset hyperparameters)
         predictions (infer-batch algorithm predictor-type model selected-features hyperparameters (:feature-maps validation-set)
                                  :scaling-factors scaling-factors :label-scaling-fns label-scaling-fns)]
     (dispose algorithm model)
@@ -249,10 +247,9 @@
 
 (defn evaluate
   "Either cross validation or validation using a held out test set"
-  [algorithm predictor-type selected-features hyperparameters dataset-path evaluate-options
-   & {:keys [scaling-factors label-scaling-fns example-weights-path example-groups-path]}]
-  (let [dataset (dataset/load-csv-files dataset-path example-weights-path example-groups-path)
-        splits-to-evaluate (create-train-validate-splits evaluate-options dataset)
+  [algorithm predictor-type selected-features hyperparameters dataset evaluate-options
+   & {:keys [scaling-factors label-scaling-fns]}]
+  (let [splits-to-evaluate (create-train-validate-splits evaluate-options dataset)
         validation-sets (map second splits-to-evaluate)
         predictions (->> splits-to-evaluate
                          (pmap (fn [[dataset validation-set]]
@@ -411,9 +408,8 @@
 (defn optimize-hyperparameters
   "This function is responsible for training a model with the best
   hyperparameters found by the provided `hyperparameter-search-fn`."
-  [algorithm predictor-type selected-features hardcoded-hyperparameters hyperparameter-search-fn hyperparameter-search-space dataset-path evaluate-options
-   & {:keys [selection-metric threads-pool scaling-factors feature-scaling-fns
-             label-scaling-fns example-weights-path example-groups-path]}]
+  [algorithm predictor-type selected-features hardcoded-hyperparameters hyperparameter-search-fn hyperparameter-search-space dataset evaluate-options
+   & {:keys [selection-metric threads-pool scaling-factors feature-scaling-fns label-scaling-fns]}]
   {:pre [(spec/check ::algorithm algorithm)
          (spec/check ::predictor-type predictor-type)
          (spec/check ::hyperparameters hardcoded-hyperparameters)
@@ -432,13 +428,11 @@
                                        predictor-type
                                        selected-features
                                        hyperparameters
-                                       dataset-path
+                                       dataset
                                        evaluate-options
                                        :scaling-factors scaling-factors
                                        :feature-scaling-fns feature-scaling-fns
-                                       :label-scaling-fns label-scaling-fns
-                                       :example-weights-path example-weights-path
-                                       :example-groups-path example-groups-path)]
+                                       :label-scaling-fns label-scaling-fns)]
                  {:optimal-params hyperparameters
                   :selected-evaluation (get metrics selection-metric)
                   :model-evaluations metrics}))

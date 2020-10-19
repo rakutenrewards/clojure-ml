@@ -40,21 +40,28 @@
                               :p 0.1
                               :weights nil})
 
-(defn- to-temp-svm-file
-  [dataset-csv-path]
-  (let [file (doto (File/createTempFile "data_" ".csv")
-               (.deleteOnExit))
-        temp-svm-path (.getPath file)]
-    (conversion/csv-to-libsvm dataset-csv-path temp-svm-path)
-    file))
+(defn- feature-vector->feature-node-array
+  [feature-vector]
+  (->> feature-vector
+       (keep-indexed
+        (fn [i x]
+          (when (number? x)
+            (FeatureNode. (inc i) x))))
+       (into-array)))
 
-(defn- problem
-  "Define a problem space by reading a CSV training set."
-  [dataset-csv-path]
-  (-> dataset-csv-path
-      (to-temp-svm-file)
-      (io/file)
-      (#(Problem/readFromFile % 0.0))))
+(defn- dataset->problem
+  "Define a problem space from a dataset."
+  [{:keys [labels feature-maps features]}]
+  (let [problem (Problem.)]
+    (set! (.l problem) (count labels))
+    (set! (.n problem) (count features))
+    (set! (.y problem) (double-array labels))
+    (set! (.x problem)
+          (->> feature-maps
+               (map #(conversion/feature-map-to-vector features %))
+               (map feature-vector->feature-node-array)
+               (into-array)))
+    problem))
 
 (defn- parameters
   "Define all the parameters required by a Linear SVM trainer. The `weight`
@@ -80,8 +87,8 @@
     parameters))
 
 (defn train
-  [dataset-csv-path hyperparameters]
-  (Linear/train (problem dataset-csv-path) (parameters hyperparameters)))
+  [dataset hyperparameters]
+  (Linear/train (dataset->problem dataset) (parameters hyperparameters)))
 
 (defn save
   [model filepath]

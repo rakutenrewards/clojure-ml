@@ -2,7 +2,7 @@
   (:require
    [clojure.test :refer [deftest is testing]]
    [conjure.core :refer [stubbing verify-call-times-for verify-first-call-args-for]]
-   [curbside.ml.data.conversion :as conversion]
+   [curbside.ml.data.dataset :as dataset]
    [curbside.ml.models :as models]
    [curbside.ml.utils.tests :as tutils]))
 
@@ -28,6 +28,12 @@
                                          :max_depth {:min  5 :max  9 :type "integer"}
                                          :booster   {:type   "string" :values ["dart"]}})
 
+(def dummy-regression-dataset
+  (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil))
+
+(def dummy-ranking-dataset
+  (dataset/load-csv-files tutils/dummy-ranking-dataset-path nil tutils/dummy-ranking-dataset-groups-path))
+
 (deftest test-optimize-hyperparameters-grid
   (testing "Check if optimize hyperparameters returns a model with all valid sets of hyperparameters according to given spec or not for grid search"
     (tutils/stubbing-private [models/grid-search-combos grid-search-combos-stub-value]
@@ -41,7 +47,7 @@
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-grid
-                                                                                        tutils/dummy-regression-single-label-dataset-path
+                                                                                        dummy-regression-dataset
                                                                                         evaluate-options)]
         (verify-call-times-for models/grid-search-combos 1)
         (verify-first-call-args-for models/grid-search-combos hyperparameter-search-space-grid)
@@ -62,7 +68,7 @@
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-random
-                                                                                        tutils/dummy-regression-single-label-dataset-path
+                                                                                        dummy-regression-dataset
                                                                                         evaluate-options)]
         (verify-call-times-for models/random-search-combos 1)
         (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
@@ -84,7 +90,7 @@
                                                                                           hyperparameters
                                                                                           hyperparameter-search-fn
                                                                                           hyperparameter-search-space-random
-                                                                                          tutils/dummy-regression-single-label-dataset-path
+                                                                                          dummy-regression-dataset
                                                                                           evaluate-options)]
           (verify-call-times-for models/random-search-combos 1)
           (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
@@ -107,10 +113,8 @@
                                                           hyperparameters
                                                           hyperparameter-search-fn
                                                           hyperparameter-search-space-random
-                                                          tutils/dummy-ranking-dataset-path
-                                                          evaluate-options
-                                                          :example-groups-path
-                                                          tutils/dummy-ranking-dataset-groups-path)]
+                                                          dummy-ranking-dataset
+                                                          evaluate-options)]
           (verify-call-times-for models/random-search-combos 1)
           (verify-first-call-args-for models/random-search-combos 10 hyperparameter-search-space-random)
           (is (= {:ndcg 1.0

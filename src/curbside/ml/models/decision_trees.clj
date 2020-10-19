@@ -63,7 +63,6 @@
    [clojure.java.io :as io]
    [clojure.spec.alpha :as s]
    [clojure.string :as str]
-   [curbside.ml.data.conversion :as conversion]
    [curbside.ml.utils.weka :as weka])
   (:import
    (guru.nidi.graphviz.engine Format Graphviz)
@@ -139,13 +138,13 @@
 
 (defn train
   "Train a Decision Tree model for a given training set csv with specified hyperparameters"
-  [algorithm predictor-type dataset-csv hyperparameters]
+  [algorithm predictor-type dataset hyperparameters]
   (let [tree (case algorithm
                :c4.5 (J48.)
                :m5p (M5P.)
                :random-forest (RandomForest.))]
     (.setOptions tree (parameters hyperparameters))
-    (.buildClassifier tree (conversion/csv-to-arff dataset-csv predictor-type))
+    (.buildClassifier tree (weka/dataset->weka-instances dataset predictor-type))
     tree))
 
 (defn save
