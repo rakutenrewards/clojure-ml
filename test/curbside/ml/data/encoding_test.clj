@@ -1,5 +1,6 @@
 (ns curbside.ml.data.encoding-test
   (:require
+   [clojure.spec.alpha :as s]
    [clojure.test :refer [deftest is testing]]
    [curbside.ml.data.encoding :as encoding]))
 
@@ -20,3 +21,13 @@
            :y 0})
          {:x [1 0]
           :y 0})))
+
+(deftest test-dataset-encoding-spec
+  (is (s/valid?
+       ::encoding/dataset-encoding
+       {:features
+        {:some-feature {:type :one-hot
+                        :one-hot-vectors {1 [1 0 0 0]
+                                          2 [0 1 0 0]
+                                          3 [0 0 1 0]
+                                          5 [0 0 0 1]}}}})))
