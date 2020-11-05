@@ -109,7 +109,7 @@
               {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters
                                                           :xgboost
                                                           :ranking
-                                                          ["lat" "lng"]
+                                                          ["offer-id", "a" "b" "c" "d" "e"]
                                                           hyperparameters
                                                           hyperparameter-search-fn
                                                           hyperparameter-search-space-random

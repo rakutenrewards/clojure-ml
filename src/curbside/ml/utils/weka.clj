@@ -10,12 +10,18 @@
 (defn dataset->weka-instances
   "Convert a dataset to the the Weka Instances class."
   [{:keys [features feature-maps labels] :as _dataset} predictor-type]
-  (let [csv-output-stream (PipedOutputStream.)
-        csv-input-stream (PipedInputStream. csv-output-stream)]
-    (future ;; when using piped streams, reading and writing must be in separate thread or else we can deadlock
-      (conversion/maps-to-csv csv-output-stream
-                              (cons :label features)
-                              (map #(assoc %1 :label %2) feature-maps labels)))
+  (with-open [csv-output-stream (PipedOutputStream.)
+              csv-input-stream (PipedInputStream. csv-output-stream)]
+    (future ;; when using piped streams, reading and writing must be in separate thread or else we can deadlock.
+
+      ;; A new output stream is created for this specific thread. This ensures
+      ;; that the stream is closed in case of an exception, or else this would
+      ;; cause a deadlock. This happens when thread writing to the output stream
+      ;; dies while the thread reading the input stream waits.
+      (with-open [csv-output-stream (io/output-stream csv-output-stream)]
+        (conversion/maps-to-csv csv-output-stream
+                                (cons :label features)
+                                (map #(assoc %1 :label %2) feature-maps labels))))
     (conversion/csv-to-arff csv-input-stream predictor-type)))
 
 (defn- attribute-list

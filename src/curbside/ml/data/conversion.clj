@@ -6,7 +6,6 @@
    [curbside.ml.data.encoding :as encoding]
    [curbside.ml.utils.parsing :as parsing])
   (:import
-   (java.io ByteArrayOutputStream PipedInputStream)
    (weka.core.converters CSVLoader CSVSaver)
    (weka.filters Filter)
    (weka.filters.unsupervised.attribute NumericToNominal)))

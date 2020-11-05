@@ -32,7 +32,6 @@
                  ;; Apache Commons Math3
                  [org.apache.commons/commons-math3 "3.6.1"]
 
-
                  ;; Logging
                  [org.clojure/tools.logging "1.0.0"]]
 

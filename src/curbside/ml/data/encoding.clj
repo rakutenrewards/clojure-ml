@@ -22,7 +22,7 @@
 (s/def :one-hot-encoding/type #{:one-hot})
 
 (s/def ::one-hot-encoding
-  (s/keys :req-un [:encoding-fn/type
+  (s/keys :req-un [:one-hot-encoding/type
                    ::one-hot-vectors]))
 
 (s/def ::encoding-fn ::one-hot-encoding) ;; Only this encoding is supported for now
