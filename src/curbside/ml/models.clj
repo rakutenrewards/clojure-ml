@@ -89,9 +89,7 @@
 
 (defmethod train :xgboost
   [_ predictor-type dataset params]
-  (xgboost/train dataset
-                 nil ;; TODO support passing a the dataset encoding. This may result in breaking changes in the API
-                 params))
+  (xgboost/train dataset params))
 
 (defmethod predict :xgboost
   [_ _predictor-type model _seleted-features hyperparameters feature-vector]
@@ -209,14 +207,15 @@
   operations required by all models. Such operations include:
   - Feature selection
   - Feature scaling (optional)
+  - Feature encoding (optional)
   - Querying a model prediction
   - Scaling the output of the model (optional)"
   [algorithm predictor-type model selected-features hyperparameters feature-map
-   & {:keys [scaling-factors feature-scaling-fns label-scaling-fns]}]
+   & {:keys [scaling-factors feature-scaling-fns label-scaling-fns dataset-encoding]}]
   (->> feature-map
        (parse-feature-map selected-features)
        (feature-scaling feature-scaling-fns scaling-factors)
-       (conversion/feature-map-to-vector selected-features)
+       (conversion/feature-map-to-vector selected-features dataset-encoding)
        (predict algorithm predictor-type model selected-features hyperparameters)
        (#(if (= predictor-type :classification)
            (classify %)
@@ -232,8 +231,11 @@
   [algorithm predictor-type selected-features hyperparameters
    scaling-factors label-scaling-fns dataset validation-set]
   (let [model (train algorithm predictor-type dataset hyperparameters)
-        predictions (infer-batch algorithm predictor-type model selected-features hyperparameters (:feature-maps validation-set)
-                                 :scaling-factors scaling-factors :label-scaling-fns label-scaling-fns)]
+        predictions (infer-batch algorithm predictor-type model selected-features hyperparameters
+                                 (:feature-maps validation-set)
+                                 :scaling-factors scaling-factors
+                                 :label-scaling-fns label-scaling-fns
+                                 :dataset-encoding (:encoding validation-set))]
     (dispose algorithm model)
     predictions))
 

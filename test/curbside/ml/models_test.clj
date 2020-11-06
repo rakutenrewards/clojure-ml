@@ -29,10 +29,14 @@
                                          :booster   {:type   "string" :values ["dart"]}})
 
 (def dummy-regression-dataset
-  (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil))
+  (dataset/load-files
+   :dataset-path tutils/dummy-regression-single-label-dataset-path))
 
 (def dummy-ranking-dataset
-  (dataset/load-csv-files tutils/dummy-ranking-dataset-path nil tutils/dummy-ranking-dataset-groups-path))
+  (dataset/load-files
+   :dataset-path tutils/dummy-ranking-dataset-path
+   :groups-path tutils/dummy-ranking-dataset-groups-path
+   :encoding-path tutils/dummy-ranking-dataset-encoding-path))
 
 (deftest test-optimize-hyperparameters-grid
   (testing "Check if optimize hyperparameters returns a model with all valid sets of hyperparameters according to given spec or not for grid search"

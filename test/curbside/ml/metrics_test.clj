@@ -1,6 +1,7 @@
 (ns curbside.ml.metrics-test
-  (:require [curbside.ml.metrics :as metrics]
-            [clojure.test :refer [deftest is testing]]))
+  (:require
+   [clojure.test :refer [deftest is testing]]
+   [curbside.ml.metrics :as metrics]))
 
 (def a-dataset
   {:feature-maps [{:a 0, :b 0}

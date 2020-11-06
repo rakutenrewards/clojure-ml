@@ -1,5 +1,5 @@
 {:features
- {:member-id
+ {:offer-id
   {:type :one-hot
    :one-hot-vectors {0 [1 0 0 0 0 0]
                      1 [0 1 0 0 0 0]

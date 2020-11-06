@@ -10,7 +10,6 @@
   (is (= 2 (stats/num-distinct-values [1 1.0])))
   (is (= 3 (stats/num-distinct-values [1 1.0 "foo"]))))
 
-
 (deftest num-integer-values
   (is (= 0 (stats/num-integer-values [])))
   (is (= 1 (stats/num-integer-values [1])))

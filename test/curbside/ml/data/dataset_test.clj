@@ -1,7 +1,8 @@
 (ns curbside.ml.data.dataset-test
   (:require
    [clojure.test :refer [deftest is testing]]
-   [curbside.ml.data.dataset :as ts]))
+   [curbside.ml.data.dataset :as ts]
+   [curbside.ml.data.encoding :as encoding]))
 
 (def some-dataset
   {:features [:a :b]
@@ -21,11 +22,20 @@
          :weights [0.2 0.3 0.1]
          :groups [2 3 1]))
 
+(def some-dataset-with-weights-groups-encoding
+  (assoc some-dataset-with-weights-and-groups
+         :encoding {:features {:a {:type :one-hot
+                                   :one-hot-vectors {0 [1 0 0 0 0 0]
+                                                     1 [0 1 0 0 0 0]
+                                                     2 [0 0 1 0 0 0]
+                                                     3 [0 0 0 1 0 0]
+                                                     4 [0 0 0 0 1 0]
+                                                     5 [0 0 0 0 0 1]}}}}))
+
 (deftest save-and-load-dataset
-  (is (= some-dataset-with-weights-and-groups
-         (let [{:keys [dataset-path weights-path groups-path]}
-               (ts/save-temp-csv-files some-dataset-with-weights-and-groups)]
-           (ts/load-csv-files dataset-path weights-path groups-path)))))
+  (is (= some-dataset-with-weights-groups-encoding
+         (let [paths (ts/save-temp-files some-dataset-with-weights-groups-encoding)]
+           (apply ts/load-files (apply concat paths))))))
 
 (deftest fractions-sum-to-one?
   (is (true? (#'ts/fractions-sum-to-one? [0.6 0.4])))
@@ -79,21 +89,29 @@
          (with-redefs [shuffle reverse]
            (#'ts/indices-of-splits 9 true [(/ 1 3) (/ 1 3) (/ 1 3)])))))
 
+(def some-feature-encoding
+  {:features {:a (encoding/create-one-hot-encoding (range 5))}})
+
+(def some-dataset-with-weights-and-encoding
+  (assoc some-dataset-with-weights :encoding some-feature-encoding))
+
 (deftest split
   (testing "training sets without a group"
     (is (= [{:features [:a :b]
+             :encoding some-feature-encoding
              :feature-maps [{:a 0 :b 0}
                             {:a 1 :b 1}
                             {:a 2 :b 2}]
              :labels [0 1 2]
              :weights [0.0 0.1 0.2]}
             {:features [:a :b]
+             :encoding some-feature-encoding
              :feature-maps [{:a 3 :b 3}
                             {:a 4 :b 4}
                             {:a 5 :b 5}]
              :labels [3 4 5]
              :weights [0.3 0.4 0.5]}]
-           (ts/split some-dataset-with-weights false [0.5 0.5])))
+           (ts/split some-dataset-with-weights-and-encoding false [0.5 0.5])))
     (is (= [{:features [:a :b]
              :feature-maps [{:a 0 :b 0}
                             {:a 1 :b 1}
