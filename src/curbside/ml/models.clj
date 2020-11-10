@@ -179,12 +179,6 @@
   [_ _predictor-type model _selected-features _hyperparameters feature-vector]
   (linear-svm/predict model feature-vector))
 
-(defn- parse-feature-map
-  [selected-features feature-map]
-  (reduce-kv #(assoc % %2 (parsing/parse-double %3))
-             {}
-             (select-keys feature-map selected-features)))
-
 (defn- feature-scaling
   [feature-scaling-fns scaling-factors feature-map]
   (if feature-scaling-fns
@@ -213,7 +207,6 @@
   [algorithm predictor-type model selected-features hyperparameters feature-map
    & {:keys [scaling-factors feature-scaling-fns label-scaling-fns dataset-encoding]}]
   (->> feature-map
-       (parse-feature-map selected-features)
        (feature-scaling feature-scaling-fns scaling-factors)
        (conversion/feature-map-to-vector selected-features dataset-encoding)
        (predict algorithm predictor-type model selected-features hyperparameters)

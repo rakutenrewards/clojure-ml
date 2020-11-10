@@ -47,7 +47,7 @@
             evaluate-options {:type :k-fold :folds 2}
             {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
                                                                                         :regression
-                                                                                        ["lat" "lng"]
+                                                                                        [:lat :lng]
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-grid
@@ -68,7 +68,7 @@
             evaluate-options {:type :k-fold :folds 2}
             {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
                                                                                         :regression
-                                                                                        ["lat" "lng"]
+                                                                                        [:lat :lng]
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-random
@@ -90,7 +90,7 @@
               evaluate-options {:type :train-test-split :train-split-percentage 80}
               {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
                                                                                           :regression
-                                                                                          ["lat" "lng"]
+                                                                                          [:lat :lng]
                                                                                           hyperparameters
                                                                                           hyperparameter-search-fn
                                                                                           hyperparameter-search-space-random
@@ -113,7 +113,7 @@
               {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters
                                                           :xgboost
                                                           :ranking
-                                                          ["offer-id", "a" "b" "c" "d" "e"]
+                                                          [:offer-id :a :b :c :d :e]
                                                           hyperparameters
                                                           hyperparameter-search-fn
                                                           hyperparameter-search-space-random
