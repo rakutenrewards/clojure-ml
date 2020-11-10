@@ -25,7 +25,7 @@
 (def some-dataset-with-weights-groups-encoding
   (assoc some-dataset-with-weights-and-groups
          :encoding {:features {:a {:type :one-hot
-                                   :vector-size 6
+                                   :encoding-size 6
                                    :one-hot-indices {0 0, 1 1, 2 2, 3 3, 4 4, 5 5}}}}))
 
 (deftest save-and-load-dataset

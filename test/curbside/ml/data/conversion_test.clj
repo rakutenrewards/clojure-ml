@@ -120,7 +120,7 @@
            (conversion/feature-map-to-vector [:a :b :c]
                                              {:features
                                               {:b {:type :one-hot
-                                                   :vector-size 3
+                                                   :encoding-size 3
                                                    :one-hot-indices {"foo" 0, "bar" 1, "spam" 2}}}}
                                              {:a 1 :b "bar" :c 3}))))
   (testing "given a feature map a no encoding, when converting to vector, no encoding is performed"

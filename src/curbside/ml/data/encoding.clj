@@ -12,18 +12,18 @@
 
 (s/def :one-hot-encoding/type #{:one-hot})
 
-(s/def ::vector-size pos-int?)
+(s/def ::encoding-size pos-int?)
 
 (s/def ::one-hot-indices (s/map-of ::feature-value nat-int?))
 
 (defn- valid-one-hot-indices?
-  [{:keys [vector-size one-hot-indices]}]
-  (every? #(< % vector-size) (vals one-hot-indices)))
+  [{:keys [encoding-size one-hot-indices]}]
+  (every? #(< % encoding-size) (vals one-hot-indices)))
 
 (s/def ::one-hot-encoding
   (s/and
    (s/keys :req-un [:one-hot-encoding/type
-                    ::vector-size
+                    ::encoding-size
                     ::one-hot-indices])
    valid-one-hot-indices?))
 
@@ -33,25 +33,25 @@
 
 (s/def ::dataset-encoding (s/keys :req-un [::features]))
 
-(defn- one-hot-vector
-  "Returns a vector of size `size` full of zeros, except for a one at index `i`."
+(defn- one-hot-seq
+  "Returns a seq of size `size` full of zeros, except for a one at index `i`."
   [size i]
-  (vec (concat (repeat i 0)
-               [1]
-               (repeat (- size i 1) 0))))
+  (concat (repeat i 0)
+          [1]
+          (repeat (- size i 1) 0)))
 
 (defn create-one-hot-encoding
   [vals]
   {:post [(spec-utils/check ::one-hot-encoding %)]}
   (let [distinct-vals (distinct vals)]
     {:type :one-hot
-     :vector-size (count distinct-vals)
+     :encoding-size (count distinct-vals)
      :one-hot-indices (zipmap distinct-vals
                               (range))}))
 
 (defn- one-hot-encode-value
-  [{:keys [one-hot-indices vector-size] :as _encoding-fn} value]
-  (one-hot-vector vector-size (get one-hot-indices value)))
+  [{:keys [one-hot-indices encoding-size] :as _encoding-fn} value]
+  (one-hot-seq encoding-size (get one-hot-indices value)))
 
 (defn- encode-value
   [encoding-fn value]

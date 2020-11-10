@@ -7,13 +7,13 @@
 (deftest test-create-one-hot-encoding
   (is (= (encoding/create-one-hot-encoding [1 2 3 5 5])
          {:type :one-hot
-          :vector-size 4
+          :encoding-size 4
           :one-hot-indices {1 0, 2 1, 3 2, 5 3}})))
 
 (deftest test-encode-feature-map
   (is (= (encoding/encode-feature-map
           {:features {:x {:type :one-hot
-                          :vector-size 2
+                          :encoding-size 2
                           :one-hot-indices {"toto" 0
                                             "tata" 1}}}}
           {:x "toto"
@@ -26,5 +26,5 @@
        ::encoding/dataset-encoding
        {:features
         {:some-feature {:type :one-hot
-                        :vector-size 4
+                        :encoding-size 4
                         :one-hot-indices {1 0, 2 1, 3 2, 5 3}}}})))
