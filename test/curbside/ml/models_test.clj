@@ -29,10 +29,14 @@
                                          :booster   {:type   "string" :values ["dart"]}})
 
 (def dummy-regression-dataset
-  (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil))
+  (dataset/load-files
+   :dataset-path tutils/dummy-regression-single-label-dataset-path))
 
 (def dummy-ranking-dataset
-  (dataset/load-csv-files tutils/dummy-ranking-dataset-path nil tutils/dummy-ranking-dataset-groups-path))
+  (dataset/load-files
+   :dataset-path tutils/dummy-ranking-dataset-path
+   :groups-path tutils/dummy-ranking-dataset-groups-path
+   :encoding-path tutils/dummy-ranking-dataset-encoding-path))
 
 (deftest test-optimize-hyperparameters-grid
   (testing "Check if optimize hyperparameters returns a model with all valid sets of hyperparameters according to given spec or not for grid search"
@@ -43,7 +47,7 @@
             evaluate-options {:type :k-fold :folds 2}
             {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
                                                                                         :regression
-                                                                                        ["lat" "lng"]
+                                                                                        [:lat :lng]
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-grid
@@ -64,7 +68,7 @@
             evaluate-options {:type :k-fold :folds 2}
             {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
                                                                                         :regression
-                                                                                        ["lat" "lng"]
+                                                                                        [:lat :lng]
                                                                                         hyperparameters
                                                                                         hyperparameter-search-fn
                                                                                         hyperparameter-search-space-random
@@ -86,7 +90,7 @@
               evaluate-options {:type :train-test-split :train-split-percentage 80}
               {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters :xgboost
                                                                                           :regression
-                                                                                          ["lat" "lng"]
+                                                                                          [:lat :lng]
                                                                                           hyperparameters
                                                                                           hyperparameter-search-fn
                                                                                           hyperparameter-search-space-random
@@ -109,7 +113,7 @@
               {:keys [optimal-params model-evaluations]} (models/optimize-hyperparameters
                                                           :xgboost
                                                           :ranking
-                                                          ["offer-id", "a" "b" "c" "d" "e"]
+                                                          [:offer-id :a :b :c :d :e]
                                                           hyperparameters
                                                           hyperparameter-search-fn
                                                           hyperparameter-search-space-random

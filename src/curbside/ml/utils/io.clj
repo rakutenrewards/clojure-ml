@@ -4,7 +4,7 @@
 
 (defn create-temp-path
   [extension]
-  (let [file (doto (File/createTempFile "test_" extension)
+  (let [file (doto (File/createTempFile "temp_" extension)
                (.deleteOnExit))]
     (.getPath file)))
 

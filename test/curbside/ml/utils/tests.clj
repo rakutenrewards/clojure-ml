@@ -26,8 +26,8 @@
 (def dummy-ranking-dataset-groups-path
   (io/resource "datasets/dummy-ranking.groups.csv"))
 
-(def dummy-ranking-dataset-encoding
-  (edn/read-string (slurp (io/resource "datasets/dummy-ranking.encoding.edn"))))
+(def dummy-ranking-dataset-encoding-path
+  (io/resource "datasets/dummy-ranking.encoding.edn"))
 
 (declare approx=)
 

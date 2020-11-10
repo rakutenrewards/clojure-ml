@@ -13,7 +13,6 @@
    [clojure.tools.logging :as log]
    [clojure.walk :as walk]
    [curbside.ml.data.conversion :as conversion]
-   [curbside.ml.data.encoding :as encoding]
    [curbside.ml.data.sampling :as sampling]
    [curbside.ml.utils.parsing :as parsing])
   (:import
@@ -38,9 +37,9 @@
    (->LabeledPoint label features)))
 
 (defn- ->DMatrix
-  [{:keys [features feature-maps labels groups weights] :as _dataset} dataset-encoding]
+  [{:keys [features feature-maps labels groups weights encoding] :as _dataset}]
   (let [vectors (->> feature-maps
-                     (map #(conversion/feature-map-to-vector features dataset-encoding %))
+                     (map #(conversion/feature-map-to-vector features encoding %))
                      (map #(->LabeledPoint %1 %2) labels))
         dm (DMatrix. (.iterator vectors) nil)]
     (when (some? groups)
@@ -63,27 +62,14 @@
     [(.slice m first-indices) (.slice m last-indices)]))
 
 (defn train
-  "Train an xgboost model on the provided training set. Accepts two maps.
-
-  The first map describes the training set and contains the following keys:
-  - `:dataset-path`: path to a csv dataset
-  - `:dataset-encoding` (optional):  encoding configuration of
-     the features (see `curbside.ml.data.encoding`)
-  - `:example-weights-path`: path to a csv list listing the weight of
-    each examples (see `curbside.ml.data.sampling`)
-  - `:example-groups-path`: path to a single column (group) csv file
-    (used for ranking, see xgboost's official documentation).
-
-  Not that for ranking tasks, example weights are per group, meaning that both
-  csv files must have the same number of rows.
-
-  The second argument map is the hyperparameters of the models. See
+  "Train an xgboost model on the provided `dataset`.
+  The first argument is a `::clojure.ml.data.dataset/dataset`, and the second
+  argument is a map of the hyperparameters of the models. See
   https://xgboost.readthedocs.io/en/latest/parameter.html#"
   [dataset
-   dataset-encoding
    {:keys [early-stopping-rounds num-rounds validation-set-size]
     :as hyperparameters}]
-  (let [dm (->DMatrix dataset dataset-encoding)
+  (let [dm (->DMatrix dataset)
         [train val] (if (some? validation-set-size)
                       (split-DMatrix dm validation-set-size)
                       [dm nil])

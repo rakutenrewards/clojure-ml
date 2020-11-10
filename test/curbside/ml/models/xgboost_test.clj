@@ -13,7 +13,8 @@
    (ml.dmlc.xgboost4j.java Booster)))
 
 (deftest test-split-dmatrix
-  (let [dm (#'xgboost/->DMatrix (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil) nil)
+  (let [dm (#'xgboost/->DMatrix (dataset/load-files
+                                 :dataset-path tutils/dummy-regression-single-label-dataset-path))
         [dm1 dm2] (#'xgboost/split-DMatrix dm 0.2)]
     (is (= 9 (.rowNum dm1)))
     (is (= 2 (.rowNum dm2)))))
@@ -21,21 +22,20 @@
 (deftest test-train-and-predict-regression
   (testing "given a dataset with a single label, when training, then the model always return a prediction close to this label."
     (let [hyperparameters {:verbosity 3 :num-rounds 5 :booster "dart" :learning_rate 0.9 :objective "reg:squarederror"}
-          dataset (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil)
-          model (xgboost/train dataset nil hyperparameters)
+          dataset (dataset/load-files :dataset-path tutils/dummy-regression-single-label-dataset-path)
+          model (xgboost/train dataset hyperparameters)
           prediction (xgboost/predict model hyperparameters [0 0])]
       (is (tutils/approx= 0.0 prediction 1e-1)))))
 
 (deftest test-train-and-predict-ranking
   (testing "given a dummy ranking dataset, when training, then the model can be used to predict"
     (let [hyperparameters {:num-rounds 5 :max_depth 5 :learning_rate 0.99 :objective "rank:ndcg"}
-          dataset (dataset/load-csv-files
-                   tutils/dummy-ranking-dataset-path
-                   nil
-                   tutils/dummy-ranking-dataset-groups-path)
+          dataset (dataset/load-files
+                   :dataset-path tutils/dummy-ranking-dataset-path
+                   :groups-path tutils/dummy-ranking-dataset-groups-path
+                   :encoding-path tutils/dummy-ranking-dataset-encoding-path)
           model (xgboost/train
                  dataset
-                 tutils/dummy-ranking-dataset-encoding
                  hyperparameters)
           prediction (xgboost/predict model hyperparameters [0 1 2 3 4 5])]
       (is (tutils/approx= prediction 0.5 1e-1))))) ;; Regression test
@@ -46,12 +46,11 @@
                            :learning_rate 0.9 :objective "reg:squarederror"
                            :weight-mean 0.5 :weight-label-name "label"
                            :weight-stddev 1.0}
-          dataset (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path
-                                          tutils/dummy-example-weights-path
-                                          nil)
+          dataset (dataset/load-files
+                   :dataset-path tutils/dummy-regression-single-label-dataset-path
+                   :weights-path tutils/dummy-example-weights-path)
           model (xgboost/train
                  dataset
-                 nil
                  hyperparameters)
           prediction (xgboost/predict model hyperparameters [0 0])]
       (is (tutils/approx= 0.0 prediction 1e-1)))))
@@ -63,9 +62,10 @@
            :validation-set-size 0.5
            :early-stopping-rounds 5}
           timeout-ch (timeout 2000)
-          dataset (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil)
+          dataset (dataset/load-files
+                   :dataset-path tutils/dummy-regression-single-label-dataset-path)
           model-ch (thread-call
-                    #(xgboost/train dataset nil hyperparameters))
+                    #(xgboost/train dataset hyperparameters))
           [v c] (alts!! [timeout-ch model-ch])]
       (is (= c model-ch))
       (is (= Booster (type (:xgboost-model v)))))))
@@ -73,10 +73,10 @@
 (deftest test-save-and-load-model
   (testing "given a trained model, when saving and loading, then the loaded model is the model that was saved."
     (let [hyperparameters {:booster "gbtree"}
-          dataset (dataset/load-csv-files tutils/dummy-regression-single-label-dataset-path nil nil)
+          dataset (dataset/load-files
+                   :dataset-path tutils/dummy-regression-single-label-dataset-path)
           model (xgboost/train
                  dataset
-                 nil
                  hyperparameters)
           model-path (io-utils/create-temp-path ".xgb")]
       (xgboost/save model model-path)

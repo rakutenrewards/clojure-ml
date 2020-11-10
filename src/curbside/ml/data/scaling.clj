@@ -174,10 +174,10 @@
   is outputted at `outpt-csv-file`, and the scaling factors used to perform
   scaling are saved at `edn-factors-path`."
   [input-csv-path output-csv-file edn-factors-path feature-scaling-fns label-scaling-fns]
-  (let [dataset (dataset/load-csv-files input-csv-path nil nil)
+  (let [dataset (dataset/load-files :dataset-path input-csv-path)
         [scaled-dataset factors] (scale-dataset feature-scaling-fns label-scaling-fns dataset)]
     (spit edn-factors-path (pr-str factors))
-    (dataset/save-csv-files scaled-dataset output-csv-file nil nil)))
+    (dataset/save-files scaled-dataset :dataset-path output-csv-file)))
 
 (defn unscale-label
   "Unscaled a single value, successively unscaling the `scaling-fns` in reverse

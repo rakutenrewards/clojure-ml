@@ -20,9 +20,11 @@
     and the two last are in the last group. This is the group semantic used by
     XGBoost."
   (:require
+   [clojure.edn :as edn]
    [clojure.java.io :as io]
    [clojure.spec.alpha :as s]
    [curbside.ml.data.conversion :as conversion]
+   [curbside.ml.data.encoding :as encoding]
    [curbside.ml.utils.io :as io-utils]
    [curbside.ml.utils.spec :as spec-utils]))
 
@@ -35,6 +37,7 @@
 (s/def ::groups (s/and (s/coll-of number?) vector?))
 (s/def ::labels (s/and (s/coll-of number?) vector?))
 (s/def ::weights (s/and (s/coll-of number?) vector?))
+(s/def ::encoding ::encoding/dataset-encoding)
 
 (defn- valid-label-count?
   [{:keys [feature-maps labels]}]
@@ -54,16 +57,26 @@
       (= (count labels)
          (apply + groups))))
 
+(defn- valid-encoding?
+  [{:keys [encoding features]}]
+  (if (some? encoding)
+    (let [features (set features)
+          encoded-features (keys (:features encoding))]
+      (every? #(contains? features %) encoded-features))
+    true))
+
 (s/def ::dataset
   (s/and
    (s/keys :req-un [::features
                     ::feature-maps
                     ::labels]
            :opt-un [::groups
-                    ::weights])
+                    ::weights
+                    ::encoding])
    valid-label-count?
    valid-weight-count?
-   valid-groups?))
+   valid-groups?
+   valid-encoding?))
 
 ;; =============================================================================
 ;; CSV loading/saving
@@ -81,11 +94,11 @@
   [filepath]
   (mapv :weight (conversion/csv-to-maps filepath)))
 
-(defn load-csv-files
+(defn load-files
   "Loads a dataset map from csv files. The `dataset-path` must be
   provided, while the others are optional. If `groups-path` is specified but not
   `weights-path`, a default weight of 1.0 is attributed to each group."
-  [dataset-path weights-path groups-path]
+  [& {:keys [dataset-path encoding-path groups-path weights-path]}]
   {:post [(spec-utils/check ::dataset %)]}
   (let [features (rest (conversion/csv-column-keys dataset-path)) ;; Disregard the first column which is :label
         maps (conversion/csv-to-maps dataset-path)
@@ -98,23 +111,28 @@
     (cond-> {:features (vec features)
              :feature-maps (mapv #(dissoc % :label) maps)
              :labels (mapv :label maps)}
+      (some? encoding-path)
+      (assoc :encoding (edn/read-string (slurp encoding-path)))
+
       (some? weights)
       (assoc :weights weights)
 
       (some? groups)
       (assoc :groups groups))))
 
-(defn save-csv-files
-  "Saves a dataset to csv files. Labels and feature maps are written to
-  `dataset-path`. The groups and weights are written to `weights-path` and
-  `groups-path`, if present."
-  [{:keys [features feature-maps labels groups weights] :as _dataset}
-   dataset-path weights-path groups-path]
+(defn save-files
+  "Saves a dataset to files. The features maps, labels, groups and weights are
+  written to csv files. The encoding is written in edn format. "
+  [{:keys [features feature-maps labels encoding groups weights] :as _dataset}
+   & {:keys [dataset-path encoding-path groups-path weights-path] :as _path}]
   ;; Write the features and labels
   (->> (map #(assoc %1 :label %2)
             feature-maps labels)
        (conversion/maps-to-csv dataset-path
                                (cons :label features)))
+  ;; Write encoding
+  (when (some? encoding)
+    (spit encoding-path (pr-str encoding)))
   ;; Write groups
   (when (some? groups)
     (conversion/vector-to-csv groups-path "group" groups))
@@ -122,20 +140,22 @@
   (when (some? weights)
     (conversion/vector-to-csv weights-path "weight" weights)))
 
-(defn save-temp-csv-files
+(defn save-temp-files
   "Saves a dataset to temporary csv files. Returns a map containing the path
   of the temporary files created: `dataset-path`, `weights-path` (if
   present) and `groups-path` (if present)."
-  [{:keys [groups weights] :as dataset}]
-  (let [dataset-path (io-utils/create-temp-csv-path)
-        groups-path (when (some? groups)
-                      (io-utils/create-temp-csv-path))
-        weights-path (when (some? weights)
-                       (io-utils/create-temp-csv-path))]
-    (save-csv-files dataset dataset-path weights-path groups-path)
-    (cond-> {:dataset-path dataset-path}
-      (some? groups) (assoc :groups-path groups-path)
-      (some? weights) (assoc :weights-path weights-path))))
+  [{:keys [encoding groups weights] :as dataset}]
+  (let [paths (cond-> {:dataset-path (io-utils/create-temp-csv-path)}
+                (some? encoding)
+                (assoc :encoding-path (io-utils/create-temp-path ".edn"))
+
+                (some? groups)
+                (assoc :groups-path (io-utils/create-temp-csv-path))
+
+                (some? weights)
+                (assoc :weights-path (io-utils/create-temp-csv-path)))]
+    (apply save-files dataset (apply concat paths))
+    paths))
 
 ;; =============================================================================
 ;; Splitting

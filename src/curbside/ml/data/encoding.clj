@@ -9,21 +9,23 @@
 (s/def ::feature keyword?)
 (s/def ::feature-value (s/or :number number? :string string?))
 
-(s/def ::one-hot-vector
-  (s/cat :zeros (s/* zero?)
-         :one #{1}
-         :zeros (s/* zero?)))
-
-(s/def ::one-hot-vectors
-  (s/and
-   (s/map-of ::feature-value ::one-hot-vector)
-   #(apply = (map count (vals %)))))
 
 (s/def :one-hot-encoding/type #{:one-hot})
 
+(s/def ::encoding-size pos-int?)
+
+(s/def ::one-hot-indices (s/map-of ::feature-value nat-int?))
+
+(defn- valid-one-hot-indices?
+  [{:keys [encoding-size one-hot-indices]}]
+  (every? #(< % encoding-size) (vals one-hot-indices)))
+
 (s/def ::one-hot-encoding
-  (s/keys :req-un [:one-hot-encoding/type
-                   ::one-hot-vectors]))
+  (s/and
+   (s/keys :req-un [:one-hot-encoding/type
+                    ::encoding-size
+                    ::one-hot-indices])
+   valid-one-hot-indices?))
 
 (s/def ::encoding-fn ::one-hot-encoding) ;; Only this encoding is supported for now
 
@@ -31,25 +33,25 @@
 
 (s/def ::dataset-encoding (s/keys :req-un [::features]))
 
-(defn- identity-matrix
-  "Returns an identity matrix of size `n`."
-  [n]
-  (for [i (range n)]
-    (vec (concat (repeat i 0)
-                 [1]
-                 (repeat (- n i 1) 0)))))
+(defn- one-hot-seq
+  "Returns a seq of size `size` full of zeros, except for a one at index `i`."
+  [size i]
+  (concat (repeat i 0)
+          [1]
+          (repeat (- size i 1) 0)))
 
 (defn create-one-hot-encoding
   [vals]
   {:post [(spec-utils/check ::one-hot-encoding %)]}
   (let [distinct-vals (distinct vals)]
     {:type :one-hot
-     :one-hot-vectors (zipmap distinct-vals
-                              (identity-matrix (count distinct-vals)))}))
+     :encoding-size (count distinct-vals)
+     :one-hot-indices (zipmap distinct-vals
+                              (range))}))
 
 (defn- one-hot-encode-value
-  [{:keys [one-hot-vectors] :as _encoding-fn} value]
-  (get one-hot-vectors value))
+  [{:keys [one-hot-indices encoding-size] :as _encoding-fn} value]
+  (one-hot-seq encoding-size (get one-hot-indices value)))
 
 (defn- encode-value
   [encoding-fn value]
