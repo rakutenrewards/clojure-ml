@@ -191,10 +191,6 @@
     (scaling/unscale-label label-scaling-fns scaling-factors prediction)
     prediction))
 
-(defn- classify
-  [predicted]
-  (NominalPrediction. predicted (NominalPrediction/makeDistribution predicted 2)))
-
 (defn infer
   "This function performs the inference steps to perform predictions using a
   single trained model. It includes data preparation and post-processing
@@ -210,9 +206,6 @@
        (feature-scaling feature-scaling-fns scaling-factors)
        (conversion/feature-map-to-vector selected-features dataset-encoding)
        (predict algorithm predictor-type model selected-features hyperparameters)
-       (#(if (= predictor-type :classification)
-           (classify %)
-           %))
        (unscale-label label-scaling-fns scaling-factors)))
 
 (defn- infer-batch

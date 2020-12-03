@@ -95,9 +95,11 @@
   (mapv :weight (conversion/csv-to-maps filepath)))
 
 (defn load-files
-  "Loads a dataset map from csv files. The `dataset-path` must be
-  provided, while the others are optional. If `groups-path` is specified but not
-  `weights-path`, a default weight of 1.0 is attributed to each group."
+  "Loads a dataset map from files. The `dataset-path` must be provided, while the
+  others are optional. If `groups-path` is specified but not `weights-path`, a
+  default weight of 1.0 is attributed to each group. `dataset-path`,
+  `groups-path` and `weights-path` must point to a csv file, while encoding
+  files must point to a edn file."
   [& {:keys [dataset-path encoding-path groups-path weights-path]}]
   {:post [(spec-utils/check ::dataset %)]}
   (let [features (rest (conversion/csv-column-keys dataset-path)) ;; Disregard the first column which is :label
