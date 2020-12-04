@@ -51,7 +51,8 @@
 
 (defn- one-hot-encode-value
   [{:keys [one-hot-indices encoding-size] :as _encoding-fn} value]
-  (one-hot-seq encoding-size (get one-hot-indices value)))
+  (when-let [i (get one-hot-indices value)]
+    (one-hot-seq encoding-size i)))
 
 (defn- encode-value
   [encoding-fn value]
@@ -62,6 +63,8 @@
   [dataset-encoding feature-map]
   {:pre [(spec-utils/check ::dataset-encoding dataset-encoding)]}
   (reduce (fn [feature-map [feature encoding-fn]]
-            (update feature-map feature (partial encode-value encoding-fn)))
+            (if-let [value (encode-value encoding-fn (get feature-map feature))]
+              (assoc feature-map feature value)
+              (reduced nil))) ;; One of the value could not be encoded, return a nil feature map
           feature-map
           (:features dataset-encoding)))
