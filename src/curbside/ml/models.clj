@@ -199,16 +199,21 @@
   - Feature scaling (optional)
   - Feature encoding (optional)
   - Querying a model prediction
-  - Scaling the output of the model (optional)"
+  - Scaling the output of the model (optional)
+
+  Returns a prediction, or nil if the feature map could not be encoded using the
+  provided dataset encoding."
   [algorithm predictor-type model selected-features hyperparameters feature-map
    & {:keys [scaling-factors feature-scaling-fns label-scaling-fns dataset-encoding]}]
-  (->> feature-map
-       (feature-scaling feature-scaling-fns scaling-factors)
-       (conversion/feature-map-to-vector selected-features dataset-encoding)
-       (predict algorithm predictor-type model selected-features hyperparameters)
-       (unscale-label label-scaling-fns scaling-factors)))
+  (some->> feature-map
+           (feature-scaling feature-scaling-fns scaling-factors)
+           (conversion/feature-map-to-vector selected-features dataset-encoding)
+           (predict algorithm predictor-type model selected-features hyperparameters)
+           (unscale-label label-scaling-fns scaling-factors)))
 
-(defn- infer-batch
+(defn infer-batch
+  "Like `infer`, but accepts a sequence of `feature-maps` instead of a single
+  feature map. Returns a vector of prediction."
   [algorithm predictor-type model selected-features hyperparameters feature-maps & args]
   (mapv #(apply infer algorithm predictor-type model selected-features hyperparameters % args)
         feature-maps))

@@ -150,7 +150,7 @@
         (into [])))
   ([feature-names dataset-encoding feature-map]
    (if (some? dataset-encoding)
-     (->> feature-map
-          (encoding/encode-feature-map dataset-encoding)
-          (feature-map-to-vector feature-names))
+     (some->> feature-map
+              (encoding/encode-feature-map dataset-encoding)
+              (feature-map-to-vector feature-names))
      (feature-map-to-vector feature-names feature-map))))
