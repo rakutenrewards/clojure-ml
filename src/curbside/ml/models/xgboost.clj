@@ -23,18 +23,16 @@
 
 (defn- ->LabeledPoint
   "Create a labeled point from a vector."
-  ([label features]
-   (let [non-zeros-indexed (keep-indexed
-                            (fn [i v]
-                              (when-not (or (nil? v) (zero? v))
-                                [i v]))
-                            features)]
-     (LabeledPoint.
-      (float label)
-      (int-array (map first non-zeros-indexed))
-      (float-array (map second non-zeros-indexed)))))
-  ([[label & features]]
-   (->LabeledPoint label features)))
+  [label features]
+  (let [non-nil-vals-indexed (keep-indexed
+                              (fn [i v]
+                                (when (some? v)
+                                  [i v]))
+                              features)]
+    (LabeledPoint.
+     (float label)
+     (int-array (map first non-nil-vals-indexed))
+     (float-array (map second non-nil-vals-indexed)))))
 
 (defn- ->DMatrix
   [{:keys [features feature-maps labels groups weights encoding] :as _dataset}]
