@@ -398,6 +398,32 @@
     :regression :root-mean-square-error
     :ranking :ndcg))
 
+(defn- evaluate-hyperparameter-combo
+  [algorithm
+   predictor-type
+   selected-features
+   hardcoded-hyperparameters
+   dataset
+   evaluate-options
+   selection-metric
+   scaling-factors
+   feature-scaling-fns
+   label-scaling-fns
+   hyperparameter-combo]
+  (let [hyperparameters (merge hardcoded-hyperparameters hyperparameter-combo)
+        metrics (evaluate algorithm
+                          predictor-type
+                          selected-features
+                          hyperparameters
+                          dataset
+                          evaluate-options
+                          :scaling-factors scaling-factors
+                          :feature-scaling-fns feature-scaling-fns
+                          :label-scaling-fns label-scaling-fns)]
+    {:optimal-params hyperparameters
+     :selected-evaluation (get metrics selection-metric)
+     :model-evaluations metrics}))
+
 (defn optimize-hyperparameters
   "This function is responsible for training a model with the best
   hyperparameters found by the provided `hyperparameter-search-fn`."
@@ -415,26 +441,11 @@
                  :grid (grid-search-combos hyperparameter-search-space)
                  :random (random-search-combos (:iteration-count hyperparameter-search-fn)
                                                hyperparameter-search-space))
-        eval (fn [hyperparameters-to-optimize]
-               (let [hyperparameters (merge hardcoded-hyperparameters hyperparameters-to-optimize)
-                     metrics (evaluate algorithm
-                                       predictor-type
-                                       selected-features
-                                       hyperparameters
-                                       dataset
-                                       evaluate-options
-                                       :scaling-factors scaling-factors
-                                       :feature-scaling-fns feature-scaling-fns
-                                       :label-scaling-fns label-scaling-fns)]
-                 {:optimal-params hyperparameters
-                  :selected-evaluation (get metrics selection-metric)
-                  :model-evaluations metrics}))
-        find-best (if (= (metrics/comparator selection-metric) <)
+        find-best (if (= (metrics/optimization-type selection-metric) :minimize)
                     min-key
-                    max-key)
-        evaluated-combos (cp/with-shutdown! [pool thread-count]
-                           (->> combos
-                                (cp/pmap pool eval)
-                                (doall)))
-        best-evaluation (apply find-best :selected-evaluation evaluated-combos)]
-    best-evaluation))
+                    max-key)]
+    (cp/with-shutdown! [pool thread-count]
+      (->> combos
+           (cp/pmap pool (partial evaluate-hyperparameter-combo algorithm predictor-type selected-features hardcoded-hyperparameters dataset
+                                  evaluate-options selection-metric scaling-factors feature-scaling-fns label-scaling-fns))
+           (apply find-best :selected-evaluation)))))

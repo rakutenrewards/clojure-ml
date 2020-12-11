@@ -83,30 +83,39 @@
     :ranking (model-metrics-ranking predictions dataset)
     :regression (model-metrics-regression predictions (:labels dataset))))
 
-(defn comparator
-  "Returns the comparator to use to compare a metrics' results to optimize its
-  value. Returns `nil` if the metric is unknown."
+(def metrics-to-minimize
+  #{:fp
+    :fn
+    :fpr
+    :error-rate
+    :root-relative-square-error
+    :root-mean-square-error
+    :root-mean-prior-squared-error
+    :relative-absolute-error
+    :mean-absolute-error})
+
+(def metrics-to-maximize
+  #{:tp
+    :tn
+    :recall
+    :precision
+    :tpr
+    :f1
+    :roc-auc
+    :auprc
+    :kappa
+    :correlation-coefficient
+    :ndcg})
+
+(defn optimization-type
+  "Returns whether the `metric` argument should be `:minimize`d or `:maximize`d.
+  Throws for an unknown metric."
   [metric]
-  (get {:tp >
-        :fp <
-        :tn >
-        :fn <
-        :recall >
-        :precision >
-        :fpr <
-        :tpr >
-        :f1 >
-        :roc-auc >
-        :auprc >
-        :kappa >
-        :correlation-coefficient >
-        :error-rate <
-        :root-relative-square-error <
-        :root-mean-square-error <
-        :root-mean-prior-squared-error <
-        :relative-absolute-error <
-        :mean-absolute-error <}
-       metric))
+  (cond
+    (contains? metrics-to-minimize metric) :minimize
+    (contains? metrics-to-maximize metric) :maximize
+    :else (throw (ex-info "Unkown metric"
+                          {:metric metric}))))
 
 (s/def ::evaluator #{:cfs-subset
                      :correlation
