@@ -429,7 +429,7 @@
                  {:optimal-params hyperparameters
                   :selected-evaluation (get metrics selection-metric)
                   :model-evaluations metrics}))
-        find-best (if (= (metrics/comparator selection-metric) <)
+        find-best (if (= (metrics/optimization-type selection-metric) :minimize)
                     min-key
                     max-key)
         evaluated-combos (cp/with-shutdown! [pool thread-count]

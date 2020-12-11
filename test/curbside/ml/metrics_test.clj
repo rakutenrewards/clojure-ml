@@ -20,3 +20,9 @@
           a-dataset
           :classification
           [:cfs-subset :correlation :relief-f]))))
+
+
+(deftest optimization-type
+  (is (= :minimize (metrics/optimization-type :mean-absolute-error)))
+  (is (= :maximize (metrics/optimization-type :ndcg)))
+  (is (thrown? Exception (metrics/optimization-type :unknow-metric-setting-a-default-would-be-dangerous))))
