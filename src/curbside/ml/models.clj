@@ -233,30 +233,37 @@
 (defn- create-train-validate-splits
   "Given a dataset and the type of split to be used, produce a vector of train and
   validation sets to be evaluated."
-  [evaluate-options dataset]
+  [dataset evaluate-options]
   (case (:type evaluate-options)
     :train-test-split [(dataset/train-test-split dataset true (:train-split-percentage evaluate-options))]
     :k-fold (dataset/k-fold-split dataset true (:folds evaluate-options))))
 
-(defn evaluate
-  "Either cross validation or validation using a held out test set"
-  [algorithm predictor-type selected-features hyperparameters dataset evaluate-options
+(defn- evaluate-splits
+  [algorithm predictor-type selected-features hyperparameters dataset-splits
    & {:keys [scaling-factors label-scaling-fns]}]
-  (let [splits-to-evaluate (create-train-validate-splits evaluate-options dataset)
-        validation-sets (map second splits-to-evaluate)
-        predictions (->> splits-to-evaluate
-                         (pmap (fn [[dataset validation-set]]
+  (let [validation-sets (map second dataset-splits)
+        predictions (->> dataset-splits
+                         (pmap (fn [[training-set validation-set]]
                                  (train-and-infer algorithm
                                                   predictor-type
                                                   selected-features
                                                   hyperparameters
                                                   scaling-factors
                                                   label-scaling-fns
-                                                  dataset
+                                                  training-set
                                                   validation-set)))
                          (apply concat))]
     (metrics/model-metrics predictor-type predictions
                            (apply dataset/concat-datasets validation-sets))))
+
+(defn evaluate
+  "Either cross validation or validation using a held out test set."
+  [algorithm predictor-type selected-features hyperparameters dataset evaluate-options
+   & {:keys [scaling-factors label-scaling-fns]}]
+  (let [splits (create-train-validate-splits dataset evaluate-options)]
+    (evaluate-splits algorithm predictor-type selected-features hyperparameters splits
+                     :scaling-factors scaling-factors
+                     :label-scaling-fns label-scaling-fns)))
 
 (def supported-evaluate-types #{:train-test-split :k-fold})
 
@@ -403,23 +410,21 @@
    predictor-type
    selected-features
    hardcoded-hyperparameters
-   dataset
-   evaluate-options
+   dataset-splits
    selection-metric
    scaling-factors
    feature-scaling-fns
    label-scaling-fns
    hyperparameter-combo]
   (let [hyperparameters (merge hardcoded-hyperparameters hyperparameter-combo)
-        metrics (evaluate algorithm
-                          predictor-type
-                          selected-features
-                          hyperparameters
-                          dataset
-                          evaluate-options
-                          :scaling-factors scaling-factors
-                          :feature-scaling-fns feature-scaling-fns
-                          :label-scaling-fns label-scaling-fns)]
+        metrics (evaluate-splits algorithm
+                                 predictor-type
+                                 selected-features
+                                 hyperparameters
+                                 dataset-splits
+                                 :scaling-factors scaling-factors
+                                 :feature-scaling-fns feature-scaling-fns
+                                 :label-scaling-fns label-scaling-fns)]
     {:optimal-params hyperparameters
      :selected-evaluation (get metrics selection-metric)
      :model-evaluations metrics}))
@@ -443,9 +448,11 @@
                                                hyperparameter-search-space))
         find-best (if (= (metrics/optimization-type selection-metric) :minimize)
                     min-key
-                    max-key)]
+                    max-key)
+        ;; Ensure that the same train/valid or k-folds are used for each hyperparameter combo
+        dataset-splits (create-train-validate-splits dataset evaluate-options)]
     (cp/with-shutdown! [pool thread-count]
       (->> combos
-           (cp/pmap pool (partial evaluate-hyperparameter-combo algorithm predictor-type selected-features hardcoded-hyperparameters dataset
-                                  evaluate-options selection-metric scaling-factors feature-scaling-fns label-scaling-fns))
+           (cp/pmap pool (partial evaluate-hyperparameter-combo algorithm predictor-type selected-features hardcoded-hyperparameters dataset-splits
+                                  selection-metric scaling-factors feature-scaling-fns label-scaling-fns))
            (apply find-best :selected-evaluation)))))
