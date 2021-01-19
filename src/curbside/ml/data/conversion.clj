@@ -145,8 +145,10 @@
   "Converts a map of features to a vector using a vector of feature-names."
   ([feature-names feature-map]
    (->> feature-names
-        (map (fn [n] (get feature-map n)))
-        (flatten)
+        (mapcat #(let [value (get feature-map %)]
+                   (if (sequential? value) ;; a one-hot encoding for instance
+                     value
+                     [value])))
         (into [])))
   ([feature-names dataset-encoding feature-map]
    (if (some? dataset-encoding)
