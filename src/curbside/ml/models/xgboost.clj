@@ -22,17 +22,25 @@
 (def default-num-rounds 10)
 
 (defn- ->LabeledPoint
-  "Create a labeled point from a vector."
+  "Create a labeled point from a label and a vector of features.
+
+  Implemented using transient data structures for performance reasons."
   [label features]
-  (let [non-nil-vals-indexed (keep-indexed
-                              (fn [i v]
-                                (when (some? v)
-                                  [i v]))
-                              features)]
-    (LabeledPoint.
-     (float label)
-     (int-array (map first non-nil-vals-indexed))
-     (float-array (map second non-nil-vals-indexed)))))
+  (loop [features features
+         i 0
+         non-nil-indices (transient [])
+         values (transient [])]
+    (if (seq features)
+      (if (nil? (first features))
+        (recur (rest features) (inc i) non-nil-indices values)
+        (recur (rest features)
+               (inc i)
+               (conj! non-nil-indices i)
+               (conj! values (first features))))
+      (LabeledPoint.
+       (float label)
+       (int-array (persistent! non-nil-indices))
+       (float-array (persistent! values))))))
 
 (defn- ->DMatrix
   [{:keys [features feature-maps labels groups weights encoding] :as _dataset}]
