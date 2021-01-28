@@ -34,7 +34,10 @@
 
                  ;; Logging
                  [org.clojure/tools.logging "1.0.0"]
-                 [org.slf4j/slf4j-log4j12 "1.7.30"]]
+                 [org.slf4j/slf4j-log4j12 "1.7.30"]
+
+                 ;;benchmarking
+                 [net.totakke/libra "0.1.1"]]
 
   :profiles {:uberjar {:aot :all}
              :ci {:plugins [[test2junit "1.3.3"]]}
@@ -46,7 +49,8 @@
   :plugins [[com.gfredericks/lein-how-to-ns "0.2.7"]
             [lein-ancient "0.6.15"]
             [jonase/eastwood "0.3.11"]
-            [lein-cljfmt "0.6.8"]]
+            [lein-cljfmt "0.6.8"]
+            [net.totakke/lein-libra "0.1.2"]]
 
   :how-to-ns {:require-docstring? false
               :sort-clauses? true
