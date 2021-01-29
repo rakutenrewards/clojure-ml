@@ -3,7 +3,7 @@
             [libra.criterium :as c]
             [curbside.ml.data.conversion :refer :all]))
 
-(defbench bench-feature-map-to-vector
+(defbench bench-feature-map-to-seq
   (let [feature-names [:a :b :c :d :e :f :g :h]
         feature-encoding {:features
                           {:b {:type :one-hot
@@ -12,4 +12,4 @@
         feature-map {:a 1 :b "bar" :c 3 :d 3 :e nil :g 1.1 :h 56}]
     (is (c/bench
          (doall
-          (feature-map-to-vector feature-names feature-encoding feature-map))))))
+          (feature-map-to-seq feature-names feature-encoding feature-map))))))

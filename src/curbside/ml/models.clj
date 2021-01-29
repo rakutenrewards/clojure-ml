@@ -207,7 +207,7 @@
    & {:keys [scaling-factors feature-scaling-fns label-scaling-fns dataset-encoding]}]
   (some->> feature-map
            (feature-scaling feature-scaling-fns scaling-factors)
-           (conversion/feature-map-to-vector selected-features dataset-encoding)
+           (conversion/feature-map-to-seq selected-features dataset-encoding)
            (predict algorithm predictor-type model selected-features hyperparameters)
            (unscale-label label-scaling-fns scaling-factors)))
 

@@ -45,7 +45,7 @@
 (defn- ->DMatrix
   [{:keys [features feature-maps labels groups weights encoding] :as _dataset}]
   (let [vectors (->> feature-maps
-                     (map #(conversion/feature-map-to-vector features encoding %))
+                     (map #(conversion/feature-map-to-seq features encoding %))
                      (map #(->LabeledPoint %1 %2) labels))
         dm (DMatrix. (.iterator vectors) nil)]
     (when (some? groups)
@@ -60,7 +60,7 @@
 
    E.g. (split-DMatrix m 0.2) returns [m1 m2], where m2 is the last 20% of
    the dataset."
-  [m split-portion]
+  [^DMatrix m split-portion]
   (let [n (.rowNum m)
         split-count (- n (Math/floor (* split-portion n)))
         first-indices (int-array (range 0 split-count))
@@ -95,9 +95,9 @@
 
 (defn dispose
   "Frees the memory allocated to given model."
-  [model]
-  (locking model
-    (.dispose (:xgboost-model model))))
+  [{:keys [^Booster xgboost-model]}]
+  (locking xgboost-model
+    (.dispose xgboost-model)))
 
 (defn- get-xgboost-handle
   "Gets the internal handle field that points to the underlying C++ Booster
@@ -110,12 +110,16 @@
 (defn- ->predict-DMatrix
   "Convert a 1D vec of floats into an DMatrix meant for use as an input to a
   Booster's .predict() method."
-  [features]
-  (DMatrix. (.iterator [(->LabeledPoint 1.0 ;; The 1.0 label will be ignored when doing prediction
-                                        features)]) nil))
+  [^clojure.lang.LazySeq features]
+  (let [^clojure.lang.PersistentVector points
+        [(->LabeledPoint 1.0 ;; The 1.0 label will be ignored when doing prediction
+                         features)]]
+    (DMatrix. (.iterator points) nil)))
 
 (defn predict
-  [{:keys [xgboost-model booster] :as _model} hyperparameters feature-vector]
+  [{:keys [^Booster xgboost-model booster] :as _model}
+   _hyperparameters
+   ^clojure.lang.LazySeq feature-vector]
   (let [dmatrix (->predict-DMatrix feature-vector)]
     (->
      ;; lock for mutual exclusion w.r.t. dispose.
@@ -249,12 +253,12 @@
    #(iff (:weight-mean %) (:weight-label-name %) (:weight-stddev %))))
 
 (defn save
-  [{:keys [xgboost-model] :as _model} filepath]
+  [{:keys [^Booster xgboost-model] :as _model} filepath]
   (.saveModel xgboost-model filepath)
   [filepath])
 
 (defn- get-booster-from-attributes
-  [xgboost-model]
+  [^Booster xgboost-model]
   (.getAttr xgboost-model "booster"))
 
 (defn- ^:deprecated get-booster-from-file

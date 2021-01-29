@@ -44,7 +44,8 @@
              :test {:resource-paths ["test-resources"]
                     :dependencies [[org.clojure/test.check "1.1.0"]]}
              :dev [:test
-                   {:dependencies [[criterium "0.4.6"]]}]}
+                   {:dependencies [[criterium "0.4.6"]]
+                    :global-vars {*warn-on-reflection* true}}]}
 
   :plugins [[com.gfredericks/lein-how-to-ns "0.2.7"]
             [lein-ancient "0.6.15"]
