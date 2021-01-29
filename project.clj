@@ -39,7 +39,7 @@
                  ;;benchmarking
                  [net.totakke/libra "0.1.1"]]
 
-  :profiles {:uberjar {:aot :all}
+  :profiles {:uberjar {:aot :all :global-vars {*assert* false}}
              :ci {:plugins [[test2junit "1.3.3"]]}
              :test {:resource-paths ["test-resources"]
                     :dependencies [[org.clojure/test.check "1.1.0"]]}
