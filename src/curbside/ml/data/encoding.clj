@@ -9,7 +9,6 @@
 (s/def ::feature keyword?)
 (s/def ::feature-value (s/or :number number? :string string?))
 
-
 (s/def :one-hot-encoding/type #{:one-hot})
 
 (s/def ::encoding-size pos-int?)

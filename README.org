@@ -25,6 +25,10 @@ The =model= namespace offers the following interface, based on the provided algo
 - optimize-hyperparameters
 - infer
 
+** Benchmarking
+
+Use =lein libra= to run benchmarks. Add benchmarks under =bench/=.
+
 ** Releasing to Github
 
 We use [[lein-release][https://github.com/relaynetwork/lein-release]] to release artifacts to Github. To use:

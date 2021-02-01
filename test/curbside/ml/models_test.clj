@@ -1,9 +1,9 @@
 (ns curbside.ml.models-test
   (:require
-   [clojure.test :refer [deftest is testing]]
-   [conjure.core :refer [stubbing verify-call-times-for verify-first-call-args-for]]
    [clojure.edn :as edn]
    [clojure.java.io :as io]
+   [clojure.test :refer [deftest is testing]]
+   [conjure.core :refer [stubbing verify-call-times-for verify-first-call-args-for]]
    [curbside.ml.data.dataset :as dataset]
    [curbside.ml.models :as models]
    [curbside.ml.utils.tests :as tutils]))

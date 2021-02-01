@@ -58,7 +58,7 @@
     (set! (.y problem) (double-array labels))
     (set! (.x problem)
           (->> feature-maps
-               (map #(conversion/feature-map-to-vector features %))
+               (map #(conversion/feature-map-to-seq features %))
                (map feature-vector->feature-node-array)
                (into-array)))
     problem))

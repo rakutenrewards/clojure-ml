@@ -11,6 +11,8 @@ build.xml
 /.lein-*
 /.nrepl-port
 .eastwood
+.lsp/
+.clj-kondo/
 
 # uberjar
 curbside-clojure-ml-*.tgz
