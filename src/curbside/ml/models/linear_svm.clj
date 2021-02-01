@@ -12,8 +12,8 @@
    (de.bwaldvogel.liblinear FeatureNode Linear Model Parameter Problem SolverType)
    (java.io File)))
 
-(s/def ::c (s/double-in :infinite? false :NaN? false))
-(s/def ::p (s/double-in :infinite? false :NaN? false))
+(s/def ::c number?)
+(s/def ::p number?)
 (s/def ::algorithm #{"l2lr-primal"
                      "l2l2"
                      "l2l2-primal"
@@ -22,7 +22,7 @@
                      "l1l2-primal"
                      "l1lr"
                      "l2lr"})
-(s/def ::eps (s/double-in :infinite? false :NaN? false))
+(s/def ::eps number?)
 (s/def ::target-weight-label integer?)
 (s/def ::weight integer?)
 

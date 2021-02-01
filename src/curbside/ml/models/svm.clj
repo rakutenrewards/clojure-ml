@@ -25,14 +25,14 @@
                     :nu-svr
                     :one-class})
 
-(s/def ::c (s/double-in :infinite? false :NaN? false))
-(s/def ::eps (s/double-in :infinite? false :NaN? false))
-(s/def ::coef0 (s/double-in :infinite? false :NaN? false))
-(s/def ::degree (s/double-in :infinite? false :NaN? false))
-(s/def ::gamma (s/double-in :infinite? false :NaN? false))
+(s/def ::c number?)
+(s/def ::eps number?)
+(s/def ::coef0 number?)
+(s/def ::degree number?)
+(s/def ::gamma number?)
 (s/def ::nr-weight integer?)
-(s/def ::nu (s/double-in :infinite? false :NaN? false))
-(s/def ::p (s/double-in :infinite? false :NaN? false))
+(s/def ::nu number?)
+(s/def ::p number?)
 (s/def ::probability integer?)
 (s/def ::shrinking integer?)
 

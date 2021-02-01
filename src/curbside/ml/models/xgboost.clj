@@ -136,25 +136,26 @@
   (or (every? identity args)
       (every? not args)))
 
-(s/def ::double-between-zero-and-one (s/double-in :min 0.0 :max 1.0))
-(s/def ::positive-double (s/double-in :min 0.0 :infinite? false))
+(s/def ::number-between-zero-and-one
+  (s/and number?
+         #(<= 0 % 1)))
 
 (s/def ::booster #{"gbtree" "gblinear" "dart"})
 (s/def ::silent (s/int-in 0 2))
 (s/def ::nthread integer?)
-(s/def ::learning_rate ::double-between-zero-and-one)
-(s/def ::gamma ::positive-double)
-(s/def ::max_delta_step ::positive-double)
+(s/def ::learning_rate ::number-between-zero-and-one)
+(s/def ::gamma pos?)
+(s/def ::max_delta_step pos?)
 (s/def ::max_depth integer?)
-(s/def ::min_child_weight ::double-between-zero-and-one)
-(s/def ::subsample ::double-between-zero-and-one)
-(s/def ::colsample_bytree ::double-between-zero-and-one)
-(s/def ::colsample_bylevel ::double-between-zero-and-one)
-(s/def ::lambda ::double-between-zero-and-one)
-(s/def ::alpha ::double-between-zero-and-one)
+(s/def ::min_child_weight ::number-between-zero-and-one)
+(s/def ::subsample ::number-between-zero-and-one)
+(s/def ::colsample_bytree ::number-between-zero-and-one)
+(s/def ::colsample_bylevel ::number-between-zero-and-one)
+(s/def ::lambda ::number-between-zero-and-one)
+(s/def ::alpha ::number-between-zero-and-one)
 (s/def ::tree_method #{"auto" "exact" "approx" "hist" "gpu_exact" "gpu_hist"})
-(s/def ::sketch_eps ::double-between-zero-and-one)
-(s/def ::scale_pos_weight ::double-between-zero-and-one)
+(s/def ::sketch_eps ::number-between-zero-and-one)
+(s/def ::scale_pos_weight ::number-between-zero-and-one)
 (s/def ::updater
   #{"grow_colmaker"
     "distcol"
@@ -172,11 +173,11 @@
 (s/def ::predictor #{"cpu_predictor" "gpu_predictor"})
 (s/def ::sample_type #{"uniform" "weighted"})
 (s/def ::normalize_type #{"tree" "forest"})
-(s/def ::rate_drop ::double-between-zero-and-one)
+(s/def ::rate_drop ::number-between-zero-and-one)
 (s/def ::one_drop (s/int-in 0 2))
-(s/def ::skip_drop ::double-between-zero-and-one)
+(s/def ::skip_drop ::number-between-zero-and-one)
 (s/def ::updater #{"shotgun" "coord_descent"})
-(s/def ::tweedie_variance_power ::double-between-zero-and-one)
+(s/def ::tweedie_variance_power ::number-between-zero-and-one)
 (s/def ::objective #{"reg:logistic"
                      "binary:logistic"
                      "binary:logitraw"
@@ -195,14 +196,14 @@
                      "reg:tweedie"
                      "reg:squarederror"
                      "reg:squaredlogerror"})
-(s/def ::base_score (s/double-in :infinite? false :NaN? false))
+(s/def ::base_score number?)
 (s/def ::seed integer?)
 (s/def ::num-rounds integer?)
-(s/def ::validation-set-size ::double-between-zero-and-one)
+(s/def ::validation-set-size ::number-between-zero-and-one)
 (s/def ::early-stopping-rounds integer?)
-(s/def ::weight-mean (s/double-in :infinite? false :NaN? false))
+(s/def ::weight-mean number?)
 (s/def ::weight-label-name (s/or :kw keyword? :str string?))
-(s/def ::weight-stddev (s/double-in :infinite? false :NaN? false))
+(s/def ::weight-stddev number?)
 
 (s/def ::hyperparameters
   (s/and

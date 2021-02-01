@@ -74,7 +74,7 @@
 
 (s/def ::u boolean?)
 (s/def ::o boolean?)
-(s/def ::c (s/double-in :infinite? false :NaN? false))
+(s/def ::c number?)
 (s/def ::m integer?)
 (s/def ::r boolean?)
 (s/def ::n integer?)
