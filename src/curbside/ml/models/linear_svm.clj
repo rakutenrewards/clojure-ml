@@ -7,13 +7,14 @@
   (:require
    [clojure.java.io :as io]
    [clojure.spec.alpha :as s]
-   [curbside.ml.data.conversion :as conversion])
+   [curbside.ml.data.conversion :as conversion]
+   [curbside.ml.utils.spec :as spec])
   (:import
    (de.bwaldvogel.liblinear FeatureNode Linear Model Parameter Problem SolverType)
    (java.io File)))
 
-(s/def ::c number?)
-(s/def ::p number?)
+(s/def ::c ::spec/finite-number)
+(s/def ::p ::spec/finite-number)
 (s/def ::algorithm #{"l2lr-primal"
                      "l2l2"
                      "l2l2-primal"
@@ -22,7 +23,7 @@
                      "l1l2-primal"
                      "l1lr"
                      "l2lr"})
-(s/def ::eps number?)
+(s/def ::eps ::spec/finite-number)
 (s/def ::target-weight-label integer?)
 (s/def ::weight integer?)
 

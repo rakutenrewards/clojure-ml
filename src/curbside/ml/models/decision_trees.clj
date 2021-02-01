@@ -63,6 +63,7 @@
    [clojure.java.io :as io]
    [clojure.spec.alpha :as s]
    [clojure.string :as str]
+   [curbside.ml.utils.spec :as spec]
    [curbside.ml.utils.weka :as weka])
   (:import
    (guru.nidi.graphviz.engine Format Graphviz)
@@ -74,7 +75,7 @@
 
 (s/def ::u boolean?)
 (s/def ::o boolean?)
-(s/def ::c number?)
+(s/def ::c ::spec/finite-number)
 (s/def ::m integer?)
 (s/def ::r boolean?)
 (s/def ::n integer?)

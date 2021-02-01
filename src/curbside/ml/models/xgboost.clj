@@ -14,7 +14,8 @@
    [clojure.walk :as walk]
    [curbside.ml.data.conversion :as conversion]
    [curbside.ml.data.sampling :as sampling]
-   [curbside.ml.utils.parsing :as parsing])
+   [curbside.ml.utils.parsing :as parsing]
+   [curbside.ml.utils.spec :as spec])
   (:import
    (ml.dmlc.xgboost4j LabeledPoint)
    (ml.dmlc.xgboost4j.java Booster DMatrix DMatrix$SparseType XGBoost XGBoostError)))
@@ -141,15 +142,15 @@
       (every? not args)))
 
 (s/def ::number-between-zero-and-one
-  (s/and number?
+  (s/and ::spec/finite-number
          #(<= 0 % 1)))
 
 (s/def ::booster #{"gbtree" "gblinear" "dart"})
 (s/def ::silent (s/int-in 0 2))
 (s/def ::nthread integer?)
 (s/def ::learning_rate ::number-between-zero-and-one)
-(s/def ::gamma pos?)
-(s/def ::max_delta_step pos?)
+(s/def ::gamma (s/and ::spec/finite-number pos?))
+(s/def ::max_delta_step (s/and ::spec/finite-number pos?))
 (s/def ::max_depth integer?)
 (s/def ::min_child_weight ::number-between-zero-and-one)
 (s/def ::subsample ::number-between-zero-and-one)
@@ -200,14 +201,14 @@
                      "reg:tweedie"
                      "reg:squarederror"
                      "reg:squaredlogerror"})
-(s/def ::base_score number?)
+(s/def ::base_score ::spec/finite-number)
 (s/def ::seed integer?)
 (s/def ::num-rounds integer?)
 (s/def ::validation-set-size ::number-between-zero-and-one)
 (s/def ::early-stopping-rounds integer?)
-(s/def ::weight-mean number?)
+(s/def ::weight-mean ::spec/finite-number)
 (s/def ::weight-label-name (s/or :kw keyword? :str string?))
-(s/def ::weight-stddev number?)
+(s/def ::weight-stddev ::spec/finite-number)
 
 (s/def ::hyperparameters
   (s/and
