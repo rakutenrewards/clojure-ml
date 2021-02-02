@@ -8,7 +8,8 @@
    [clojure.spec.alpha :as s]
    [clojure.string :as str]
    [curbside.ml.data.conversion :as conversion]
-   [curbside.ml.utils.parsing :as parsing])
+   [curbside.ml.utils.parsing :as parsing]
+   [curbside.ml.utils.spec :as spec])
   (:import
    (clojure.lang Reflector)
    (libsvm svm svm_node svm_parameter svm_problem)))
@@ -25,14 +26,14 @@
                     :nu-svr
                     :one-class})
 
-(s/def ::c number?)
-(s/def ::eps number?)
-(s/def ::coef0 number?)
-(s/def ::degree number?)
-(s/def ::gamma number?)
+(s/def ::c ::spec/finite-number)
+(s/def ::eps ::spec/finite-number)
+(s/def ::coef0 ::spec/finite-number)
+(s/def ::degree ::spec/finite-number)
+(s/def ::gamma ::spec/finite-number)
 (s/def ::nr-weight integer?)
-(s/def ::nu number?)
-(s/def ::p number?)
+(s/def ::nu ::spec/finite-number)
+(s/def ::p ::spec/finite-number)
 (s/def ::probability integer?)
 (s/def ::shrinking integer?)
 

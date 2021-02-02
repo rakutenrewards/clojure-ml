@@ -320,8 +320,8 @@
 
 (s/def ::random-search-space-dimension-string (s/keys :req-un [:string/values]))
 
-(s/def :decimal/min number?)
-(s/def :decimal/max number?)
+(s/def :decimal/min ::spec/finite-number)
+(s/def :decimal/max ::spec/finite-number)
 (s/def ::random-search-space-dimension-decimal
   (s/and (s/keys :req-un [:decimal/min :decimal/max])
          (fn [{:keys [min max]}]
@@ -359,9 +359,9 @@
   (s/map-of ::hyperparameter-search-random-space-key-check ::random-search-space-dimension))
 
 (s/def ::hyperparameter-search-space-grid (s/map-of keyword?
-                                                    (s/coll-of (s/or :double double?
-                                                                     :integer integer?
-                                                                     :string string?) :distinct true)))
+                                                    (s/coll-of (s/or :number ::spec/finite-number
+                                                                     :string string?)
+                                                               :distinct true)))
 
 (s/def ::hyperparameter-search-space (s/or :random ::hyperparameter-search-space-random
                                            :grid ::hyperparameter-search-space-grid))
