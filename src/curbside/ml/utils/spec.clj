@@ -5,9 +5,13 @@
 
 (s/def ::finite-number
   (s/and
-   (s/or :int int?
-         :finite-double (s/double-in :NaN? false :infinite? false))
-   (s/conformer second))) ;; Allows to compose ::finite-number with other predicates such as pos? without having to unform the tuple e.g. `[:int 10]`
+   (s/conformer
+    (fn [x]
+      (try
+        (double x)
+        (catch Exception _e
+          ::s/invalid))))
+    (s/double-in :NaN? false :infinite? false)))
 
 (defn check
   "Returns true if provided data matches spec, throws an
